@@ -3248,6 +3248,42 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   currentUser = session?.user || null;
 
   setTimeout(async () => {
+    if (event === "PASSWORD_RECOVERY") {
+      const newPassword = prompt("請輸入新密碼，至少 6 碼：");
+
+      if (!newPassword || newPassword.length < 6) {
+        alert("密碼未更新。新密碼至少需要 6 碼。");
+        return;
+      }
+
+      const confirmPassword = prompt("請再次輸入新密碼：");
+
+      if (newPassword !== confirmPassword) {
+        alert("兩次輸入的密碼不一致，請重新點擊密碼重設信件。");
+        return;
+      }
+
+      const { error } = await supabaseClient.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        alert(`密碼更新失敗：${error.message}`);
+        return;
+      }
+
+      alert("密碼已成功更新，請使用新密碼重新登入。");
+
+      await supabaseClient.auth.signOut();
+
+      currentUser = null;
+      isAdmin = false;
+      updateAuthNavbar();
+      showPage("home");
+
+      return;
+    }
+
     if (currentUser) {
       await ensureProfile();
       await checkAdminStatus();
