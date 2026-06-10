@@ -1,0 +1,374 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Pixalbum｜像簿</title>
+
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <header class="navbar">
+    <div class="logo">
+      <span class="logo-icon">✦</span>
+      <span>PIXALBUM</span>
+    </div>
+
+    <nav>
+      <button class="nav-link" data-page="home" type="button">Home</button>
+      <button class="nav-link" data-page="create" type="button">Create</button>
+      <button class="nav-link" data-page="gallery" type="button">Gallery</button>
+      <button class="nav-link" data-page="story" type="button">Story</button>
+      <button id="adminNavBtn" class="nav-link hidden-panel" data-page="admin" type="button">Admin</button>
+    </nav>
+
+    <div class="auth-navbar">
+      <button id="signInBtn" class="login-btn" type="button">Sign In</button>
+      <button id="signUpBtn" class="signup-btn" type="button">Sign Up</button>
+      <button id="logoutBtn" class="login-btn hidden-panel" type="button">Logout</button>
+    </div>
+  </header>
+
+  <main>
+
+    <section id="home" class="page-section active-section hero">
+      <div class="hero-content">
+        <h1>PIXALBUM</h1>
+        <h2>像簿</h2>
+        <p>Turn memories into pixel art stories.</p>
+
+        <div class="hero-buttons">
+          <button id="startBtn" class="primary-btn" type="button">Start Creating</button>
+          <button id="galleryBtn" class="secondary-btn" type="button">Explore Gallery</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="concept" class="page-section active-section concept-section">
+      <div class="concept-card">
+        <h3>Pixels</h3>
+        <p>Create your own pixel artwork with simple tools.</p>
+      </div>
+
+      <div class="concept-card">
+        <h3>Album</h3>
+        <p>Save your thoughts behind every artwork.</p>
+      </div>
+
+      <div class="concept-card">
+        <h3>Stories</h3>
+        <p>Every pixel can carry a memory, feeling, or idea.</p>
+      </div>
+    </section>
+
+    <section id="create" class="page-section create-section">
+      <h2>Create Pixel Art</h2>
+      <p class="section-subtitle">
+        Choose a canvas size, generate an AI draft, upload an image, or start drawing from scratch.
+      </p>
+
+      <p id="editModeNotice" class="edit-mode-notice hidden-panel">
+        Editing existing artwork. Save will update the original artwork.
+      </p>
+
+      <div class="ai-draft-panel ai-generate-panel">
+        <div class="ai-draft-text">
+          <h3>AI Generate Pixel Draft</h3>
+          <p>
+            Describe what you want to create. AI will generate a clearer pixel-friendly
+            reference image based on your current canvas size.
+          </p>
+        </div>
+
+        <div class="ai-generate-controls">
+          <input
+            id="aiPromptInput"
+            type="text"
+            placeholder="例如：棕色泰迪熊、橘色小貓坐在窗邊、雲上的花園入口"
+          />
+
+          <button id="generateAiDraftBtn" class="primary-btn" type="button">
+            Generate AI Draft
+          </button>
+
+          <p id="aiDraftStatus" class="ai-draft-status"></p>
+        </div>
+      </div>
+
+      <div class="ai-draft-panel">
+        <div class="ai-draft-text">
+          <h3>Image to Pixel Draft</h3>
+          <p>
+            Upload an image and turn it into a cleaner pixel reference draft.
+            Only your manual drawing will be saved.
+          </p>
+        </div>
+
+        <div class="ai-draft-controls">
+          <input type="file" id="imageUpload" accept="image/*" />
+
+          <button id="convertImageBtn" class="secondary-btn" type="button">
+            Convert to Pixel Draft
+          </button>
+
+          <div id="draftDepthWrapper" class="draft-depth-control hidden-panel">
+            <div class="draft-depth-header">
+              <span>Reference Depth</span>
+              <span id="draftDepthValue">28%</span>
+            </div>
+
+            <input
+              id="draftDepthSlider"
+              type="range"
+              min="0"
+              max="50"
+              step="1"
+              value="28"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="canvas-workspace">
+        <aside id="palettePanel" class="palette-panel hidden-panel">
+          <h3>Color Palette</h3>
+          <p>Colors from uploaded image or AI draft</p>
+
+          <div id="imagePalette" class="image-palette">
+            <span class="palette-empty">Upload image or generate AI draft first</span>
+          </div>
+
+          <div id="palettePager" class="palette-pager hidden-panel">
+            <button id="palettePrevBtn" type="button">Prev</button>
+            <span id="palettePageInfo">Page 1 / 1</span>
+            <button id="paletteNextBtn" type="button">Next</button>
+          </div>
+        </aside>
+
+        <div class="workspace-main">
+          <div class="toolbar">
+            <label>
+              Canvas:
+              <select id="canvasSize">
+                <option value="16">16 × 16</option>
+                <option value="32" selected>32 × 32</option>
+                <option value="64">64 × 64</option>
+              </select>
+            </label>
+
+            <label>
+              Color:
+              <input type="color" id="colorPicker" value="#1f4e79" />
+            </label>
+
+            <button id="drawBtn" class="tool-btn active-tool" type="button">Brush</button>
+            <button id="eraserBtn" class="tool-btn" type="button">Eraser</button>
+            <button id="eyedropperBtn" class="tool-btn" type="button">Eyedropper</button>
+            <button id="bucketBtn" class="tool-btn" type="button">Bucket</button>
+
+            <button id="undoBtn" type="button">Undo</button>
+            <button id="redoBtn" type="button">Redo</button>
+            <button id="clearBtn" type="button">Clear</button>
+          </div>
+
+          <div id="pixelCanvas" class="pixel-canvas"></div>
+        </div>
+      </div>
+
+      <div class="artwork-info">
+        <input type="text" id="artTitle" placeholder="Artwork title" />
+
+        <textarea id="artStory" placeholder="Write the story behind your artwork..."></textarea>
+
+        <label class="visibility-option">
+          <input type="checkbox" id="publishCheckbox" checked />
+          Publish to Public Gallery
+        </label>
+
+        <div class="save-buttons">
+          <button id="saveBtn" class="primary-btn" type="button">Save Artwork</button>
+          <button id="downloadBtn" class="secondary-btn" type="button">Download PNG</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="gallery" class="page-section gallery-section">
+      <h2>Gallery</h2>
+      <p id="gallerySubtitle" class="section-subtitle">
+        Explore approved public pixel memories from creators.
+      </p>
+
+      <div class="gallery-tabs">
+        <button id="publicTab" class="tab-btn active-tab" type="button">Public Gallery</button>
+        <button id="myWorksTab" class="tab-btn" type="button">My Works</button>
+      </div>
+
+      <div id="publicFilterBar" class="gallery-filters">
+        <button class="filter-btn active-filter" data-filter="all" type="button">All</button>
+        <button class="filter-btn" data-filter="featured" type="button">Featured</button>
+        <button class="filter-btn" data-filter="newest" type="button">Newest</button>
+      </div>
+
+      <div id="galleryGrid" class="gallery-grid">
+        <div class="empty-gallery">
+          目前尚無作品。開始創作第一個像素回憶吧。
+        </div>
+      </div>
+    </section>
+
+    <section id="admin" class="page-section admin-section">
+      <h2>Admin Review</h2>
+      <p class="section-subtitle">
+        管理者可審核 AI 標記作品，並可管理已公開作品。
+      </p>
+
+      <div class="admin-summary">
+        <div class="admin-summary-card">
+          <span class="admin-summary-label">Review Queue</span>
+          <strong id="adminReviewCount">0</strong>
+          <p>待審核、可疑或未通過作品</p>
+        </div>
+
+        <div class="admin-summary-card">
+          <span class="admin-summary-label">Public Works</span>
+          <strong id="adminPublicCount">0</strong>
+          <p>目前已公開展示作品</p>
+        </div>
+
+        <div class="admin-summary-card">
+          <span class="admin-summary-label">Total Works</span>
+          <strong id="adminTotalCount">0</strong>
+          <p>系統內全部作品</p>
+        </div>
+      </div>
+
+      <div class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h3>Review Queue</h3>
+            <p>顯示 AI 審核中、待人工複審、拒絕公開或可疑狀態的作品。</p>
+          </div>
+
+          <button id="refreshAdminBtn" class="secondary-btn" type="button">
+            Refresh
+          </button>
+        </div>
+
+        <div id="adminReviewGrid" class="admin-grid">
+          <div class="empty-gallery">
+            目前沒有待審核作品。
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h3>Public Management</h3>
+            <p>管理已通過 AI 審核並公開展示的作品。管理者可隱藏或刪除。</p>
+          </div>
+        </div>
+
+        <div id="adminPublicGrid" class="admin-grid">
+          <div class="empty-gallery">
+            目前沒有公開作品。
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h3>All Works</h3>
+            <p>檢視系統內所有作品狀態，方便管理者追蹤資料庫內容。</p>
+          </div>
+        </div>
+
+        <div id="adminAllGrid" class="admin-grid">
+          <div class="empty-gallery">
+            目前沒有任何作品。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="story" class="page-section story-section">
+      <h2>Every Pixel Holds a Memory</h2>
+
+      <p>
+        Pixalbum combines pixels and albums. Each artwork is not only an image,
+        but also a place to record thoughts, emotions, and personal stories.
+      </p>
+    </section>
+
+  </main>
+
+  <div id="authModal" class="modal-overlay hidden-panel">
+    <div class="auth-card">
+      <button id="authCloseBtn" class="modal-close-btn" type="button">×</button>
+
+      <h2>Welcome to Pixalbum</h2>
+      <p class="auth-subtitle">Sign in or create an account to save your pixel artworks.</p>
+
+      <div class="auth-tabs">
+        <button id="signInTab" class="auth-tab" type="button">Sign In</button>
+        <button id="signUpTab" class="auth-tab active-auth-tab" type="button">Sign Up</button>
+      </div>
+
+      <div class="auth-form">
+        <label>
+          Email
+          <input id="authEmail" type="email" placeholder="your@email.com" />
+        </label>
+
+        <label>
+          Password
+          <input id="authPassword" type="password" placeholder="至少 6 碼" />
+        </label>
+
+        <label id="displayNameWrapper">
+          Display name
+          <input id="authDisplayName" type="text" placeholder="Your display name" />
+        </label>
+
+        <button id="authSubmitBtn" class="primary-btn" type="button">Sign Up</button>
+
+        <p id="authHint" class="auth-hint">
+          New here? Create an account to start saving artworks.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="artworkModal" class="modal-overlay hidden-panel">
+    <div class="modal-card modal-card-horizontal">
+      <button id="modalCloseBtn" class="modal-close-btn" type="button">×</button>
+
+      <div class="modal-image-wrap">
+        <img id="modalArtworkImage" class="modal-artwork-image" src="" alt="Artwork detail" />
+      </div>
+
+      <div class="modal-info">
+        <p class="modal-label">Artwork Detail</p>
+        <h2 id="modalArtworkTitle">Artwork Title</h2>
+        <p id="modalArtworkAuthor" class="modal-author">Author</p>
+
+        <div class="modal-story-block">
+          <h3>Story</h3>
+          <p id="modalArtworkStory" class="modal-story">Story</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Pixalbum 像簿 © 2026</p>
+  </footer>
+
+  <script src="script.js?v=2026061017"></script>
+</body>
+</html>
