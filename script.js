@@ -98,6 +98,8 @@ let editingArtworkImagePath = null;
 let extractedPaletteColors = [];
 let currentPalettePage = 1;
 
+let currentArtworkIsAIGenerated = false;
+
 let undoStack = [];
 let redoStack = [];
 
@@ -1199,6 +1201,9 @@ colorPicker.addEventListener("input", event => {
 
 clearBtn.addEventListener("click", () => {
   pushUndoState();
+
+  currentArtworkIsAIGenerated = false;
+
   createCanvas(Number(sizeSelect.value));
   clearPalette();
   hideDraftTools();
@@ -1209,6 +1214,9 @@ sizeSelect.addEventListener("change", event => {
   const size = Number(event.target.value);
 
   pushUndoState();
+
+  currentArtworkIsAIGenerated = false;
+
   createCanvas(size);
   clearPalette();
   hideDraftTools();
@@ -1488,6 +1496,8 @@ function convertImageToPixelDraft() {
     return;
   }
 
+  currentArtworkIsAIGenerated = false;
+
   pushUndoState();
 
   const reader = new FileReader();
@@ -1630,7 +1640,9 @@ async function generateAIPixelDraft() {
     aiDraftStatus.className = "ai-draft-status success";
     aiDraftStatus.textContent = `AI 底稿已生成，並已依 ${size} × ${size} 畫布轉為較清晰的像素參考底稿。`;
 
-    alert("AI 底稿已生成完成。");
+currentArtworkIsAIGenerated = true;
+
+alert("AI 底稿已生成完成。");
   } catch (error) {
     console.error("AI draft error:", error);
     aiDraftStatus.className = "ai-draft-status error";
@@ -2029,16 +2041,17 @@ async function createNewArtwork() {
     const { data, error } = await supabaseClient
       .from("artworks")
       .insert({
-        user_id: currentUser.id,
-        title: inputValidation.title,
-        story: inputValidation.story || "尚未新增作品說明。",
-        canvas_size: pixelData.size,
-        pixel_data: pixelData,
-        image_path: uploaded.imagePath,
-        image_url: uploaded.imageUrl,
-        is_public: false,
-        review_status: wantsPublic ? "reviewing" : "private",
-        lifecycle_status: "active"
+         user_id: currentUser.id,
+         title: inputValidation.title,
+         story: inputValidation.story || "尚未新增作品說明。",
+         canvas_size: pixelData.size,
+         pixel_data: pixelData,
+         image_path: uploaded.imagePath,
+         image_url: uploaded.imageUrl,
+         is_public: false,
+         review_status: wantsPublic ? "reviewing" : "private",
+         lifecycle_status: "active",
+         ai_generated: currentArtworkIsAIGenerated
       })
       .select()
       .single();
@@ -2103,7 +2116,8 @@ async function updateExistingArtwork() {
         image_url: uploaded.imageUrl,
         is_public: false,
         review_status: wantsPublic ? "reviewing" : "private",
-        lifecycle_status: "active"
+        lifecycle_status: "active",
+        ai_generated: currentArtworkIsAIGenerated
       })
       .eq("id", editingArtworkId)
       .eq("user_id", currentUser.id)
@@ -2160,6 +2174,7 @@ async function editArtworkById(id) {
 
   editingArtworkId = data.id;
   editingArtworkImagePath = data.image_path;
+  currentArtworkIsAIGenerated = Boolean(data.ai_generated);
 
   loadPixelDataToCanvas(data.pixel_data);
 
@@ -2189,6 +2204,7 @@ async function editArtworkById(id) {
 function resetCreateArea() {
   editingArtworkId = null;
   editingArtworkImagePath = null;
+  currentArtworkIsAIGenerated = false;
 
   createCanvas(Number(sizeSelect.value));
 
@@ -3301,3 +3317,218 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 });
 
 initApp();
+
+/* =========================
+   Password Recovery Patch
+   Add this block at the very end of script.js
+========================= */
+
+const resetPasswordModalPatch = document.getElementById("resetPasswordModal");
+const newPasswordInputPatch = document.getElementById("newPasswordInput");
+const confirmPasswordInputPatch = document.getElementById("confirmPasswordInput");
+const updatePasswordBtnPatch = document.getElementById("updatePasswordBtn");
+const resetPasswordHintPatch = document.getElementById("resetPasswordHint");
+
+function pixalbumIsPasswordRecoveryUrl() {
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+  const fullUrl = `${search}${hash}`.toLowerCase();
+
+  return (
+    fullUrl.includes("type=recovery") ||
+    fullUrl.includes("recovery") ||
+    fullUrl.includes("reset-password") ||
+    fullUrl.includes("access_token") ||
+    fullUrl.includes("refresh_token") ||
+    fullUrl.includes("code=")
+  );
+}
+
+function pixalbumOpenResetPasswordModal() {
+  if (!resetPasswordModalPatch) {
+    alert("Reset Password 視窗不存在，請確認 index.html 已經加入 resetPasswordModal。");
+    return;
+  }
+
+  const authModal = document.getElementById("authModal");
+  const artworkModal = document.getElementById("artworkModal");
+
+  if (authModal) {
+    authModal.classList.add("hidden-panel");
+  }
+
+  if (artworkModal) {
+    artworkModal.classList.add("hidden-panel");
+  }
+
+  if (newPasswordInputPatch) {
+    newPasswordInputPatch.value = "";
+  }
+
+  if (confirmPasswordInputPatch) {
+    confirmPasswordInputPatch.value = "";
+  }
+
+  if (resetPasswordHintPatch) {
+    resetPasswordHintPatch.className = "auth-hint";
+    resetPasswordHintPatch.textContent = "更新成功後，系統會自動登出，請使用新密碼重新登入。";
+  }
+
+  resetPasswordModalPatch.classList.remove("hidden-panel");
+  document.body.style.overflow = "hidden";
+
+  setTimeout(() => {
+    if (newPasswordInputPatch) {
+      newPasswordInputPatch.focus();
+    }
+  }, 150);
+}
+
+function pixalbumCloseResetPasswordModal() {
+  if (!resetPasswordModalPatch) {
+    return;
+  }
+
+  resetPasswordModalPatch.classList.add("hidden-panel");
+  document.body.style.overflow = "";
+}
+
+async function pixalbumPreparePasswordRecovery() {
+  if (!pixalbumIsPasswordRecoveryUrl()) {
+    return;
+  }
+
+  try {
+    const urlParams = new URLSearchParams(window.location.search || "");
+    const code = urlParams.get("code");
+
+    if (code) {
+      const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
+
+      if (error) {
+        console.warn("exchangeCodeForSession error:", error.message);
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const { data, error } = await supabaseClient.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || !data.session) {
+      alert(
+        "密碼重設連結已開啟，但沒有取得有效登入狀態。請重新寄送密碼重設信，並確認 Supabase Redirect URL 有設定 https://pixalbum.vercel.app/**"
+      );
+      return;
+    }
+
+    pixalbumOpenResetPasswordModal();
+  } catch (error) {
+    console.error("Password recovery prepare error:", error);
+    alert(`密碼重設初始化失敗：${error.message || "Unknown error"}`);
+  }
+}
+
+async function pixalbumUpdatePassword() {
+  if (!newPasswordInputPatch || !confirmPasswordInputPatch || !updatePasswordBtnPatch) {
+    alert("重設密碼表單尚未載入，請重新整理後再試。");
+    return;
+  }
+
+  const newPassword = newPasswordInputPatch.value.trim();
+  const confirmPassword = confirmPasswordInputPatch.value.trim();
+
+  if (!newPassword || newPassword.length < 6) {
+    if (resetPasswordHintPatch) {
+      resetPasswordHintPatch.className = "auth-hint error";
+      resetPasswordHintPatch.textContent = "密碼至少需要 6 碼。";
+    }
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    if (resetPasswordHintPatch) {
+      resetPasswordHintPatch.className = "auth-hint error";
+      resetPasswordHintPatch.textContent = "兩次輸入的密碼不一致。";
+    }
+    return;
+  }
+
+  updatePasswordBtnPatch.disabled = true;
+  updatePasswordBtnPatch.textContent = "Updating...";
+
+  if (resetPasswordHintPatch) {
+    resetPasswordHintPatch.className = "auth-hint";
+    resetPasswordHintPatch.textContent = "正在更新密碼，請稍等...";
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({
+      password: newPassword
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (resetPasswordHintPatch) {
+      resetPasswordHintPatch.className = "auth-hint success";
+      resetPasswordHintPatch.textContent = "密碼已成功更新，即將登出。";
+    }
+
+    await supabaseClient.auth.signOut();
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    setTimeout(() => {
+      pixalbumCloseResetPasswordModal();
+      alert("密碼已成功更新，請使用新密碼重新登入。");
+      window.location.href = "https://pixalbum.vercel.app";
+    }, 800);
+  } catch (error) {
+    console.error("Update password error:", error);
+
+    if (resetPasswordHintPatch) {
+      resetPasswordHintPatch.className = "auth-hint error";
+      resetPasswordHintPatch.textContent = `密碼更新失敗：${error.message || "Unknown error"}`;
+    }
+  } finally {
+    updatePasswordBtnPatch.disabled = false;
+    updatePasswordBtnPatch.textContent = "Update Password";
+  }
+}
+
+if (updatePasswordBtnPatch) {
+  updatePasswordBtnPatch.addEventListener("click", pixalbumUpdatePassword);
+}
+
+if (newPasswordInputPatch) {
+  newPasswordInputPatch.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      pixalbumUpdatePassword();
+    }
+  });
+}
+
+if (confirmPasswordInputPatch) {
+  confirmPasswordInputPatch.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      pixalbumUpdatePassword();
+    }
+  });
+}
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY" && session) {
+    pixalbumOpenResetPasswordModal();
+  }
+});
+
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    pixalbumPreparePasswordRecovery();
+  }, 800);
+});

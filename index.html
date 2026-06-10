@@ -6,7 +6,8 @@
 
   <title>Pixalbum｜像簿</title>
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css?v=2026061022" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -344,6 +345,35 @@
     </div>
   </div>
 
+  <div id="resetPasswordModal" class="modal-overlay hidden-panel">
+    <div class="auth-card reset-password-card">
+      <h2>Reset Password</h2>
+      <p class="auth-subtitle">
+        請輸入新的管理者密碼。密碼至少需要 6 碼。
+      </p>
+
+      <div class="auth-form">
+        <label>
+          New password
+          <input id="newPasswordInput" type="password" placeholder="請輸入新密碼" />
+        </label>
+
+        <label>
+          Confirm password
+          <input id="confirmPasswordInput" type="password" placeholder="請再次輸入新密碼" />
+        </label>
+
+        <button id="updatePasswordBtn" class="primary-btn" type="button">
+          Update Password
+        </button>
+
+        <p id="resetPasswordHint" class="auth-hint">
+          更新成功後，系統會自動登出，請使用新密碼重新登入。
+        </p>
+      </div>
+    </div>
+  </div>
+
   <div id="artworkModal" class="modal-overlay hidden-panel">
     <div class="modal-card modal-card-horizontal">
       <button id="modalCloseBtn" class="modal-close-btn" type="button">×</button>
@@ -369,6 +399,6 @@
     <p>Pixalbum 像簿 © 2026</p>
   </footer>
 
-  <script src="script.js?v=2026061019"></script>
+  <script src="script.js?v=2026061022"></script>
 </body>
 </html>
