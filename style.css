@@ -1973,3 +1973,17 @@ footer {
 .ai-badge-label {
   line-height: 1;
 }
+
+/* =========================
+   Report Button
+========================= */
+
+.report-btn {
+  border-color: #9b2c2c;
+  color: #9b2c2c;
+}
+
+.report-btn:hover {
+  background: #9b2c2c;
+  color: white;
+}
