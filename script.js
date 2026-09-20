@@ -313,7 +313,7 @@ async function resendVerificationEmail(email) {
   const safeEmail = normalizeForSecurity(email);
 
   if (!safeEmail || !isValidEmailFormat(safeEmail)) {
-    alert("請先輸入有效的 Email。 ");
+    alert("請先輸入有效的 Email。");
     return;
   }
 
@@ -330,10 +330,34 @@ async function resendVerificationEmail(email) {
       throw error;
     }
 
-    alert("驗證信已重新寄出。請到信箱點擊驗證連結後再登入。 ");
+    alert("驗證信已重新寄出。請到信箱點擊驗證連結後再登入。");
   } catch (error) {
     console.error("Resend verification error:", error);
     alert(`重新寄送驗證信失敗：${error.message || "Unknown error"}`);
+  }
+}
+
+async function isEmailAlreadyRegistered(email) {
+  const safeEmail = normalizeForSecurity(email).toLowerCase();
+
+  if (!safeEmail || !isValidEmailFormat(safeEmail)) {
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabaseClient.rpc("check_email_registered", {
+      p_email: safeEmail
+    });
+
+    if (error) {
+      console.warn("Check registered email error:", error.message);
+      return false;
+    }
+
+    return Boolean(data);
+  } catch (error) {
+    console.warn("Check registered email exception:", error.message);
+    return false;
   }
 }
 
@@ -555,6 +579,13 @@ async function submitAuthForm() {
       return;
     }
 
+    const existingEmail = await isEmailAlreadyRegistered(email);
+
+    if (existingEmail) {
+      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。 ");
+      return;
+    }
+
     const finalDisplayName = displayName || email.split("@")[0];
 
     const signupPromise = supabaseClient.auth.signUp({
@@ -576,6 +607,11 @@ async function submitAuthForm() {
 
     if (error) {
       throw error;
+    }
+
+    if (data?.user?.identities && data.user.identities.length === 0) {
+      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。");
+      return;
     }
 
     closeAuthModal();
@@ -2456,7 +2492,7 @@ function renderLifecycleStatus(artwork) {
 }
 
 function renderFeaturedRibbon(artwork) {
-  if (!artwork.featured && artwork.lifecycle_status !== "featured") {
+  if (!artwork.featured) {
     return "";
   }
 
@@ -2489,6 +2525,25 @@ async function getTopCommentsMap(artworkIds) {
   });
 
   return map;
+}
+
+async function getLikedArtworkIds(artworkIds) {
+  if (!currentUser || !artworkIds.length) {
+    return new Set();
+  }
+
+  const { data, error } = await supabaseClient
+    .from("likes")
+    .select("artwork_id")
+    .eq("user_id", currentUser.id)
+    .in("artwork_id", artworkIds);
+
+  if (error) {
+    console.warn("Get liked artworks error:", error.message);
+    return new Set();
+  }
+
+  return new Set((data || []).map(row => row.artwork_id));
 }
 
 function getTopCommentsFromMap(commentMapForArtwork, limit = 3) {
@@ -2639,6 +2694,7 @@ async function renderGallery() {
   const artworks = await getVisibleArtworks();
   const artworkIds = artworks.map(artwork => artwork.id);
   const commentsMap = await getTopCommentsMap(artworkIds);
+  const likedArtworkIds = await getLikedArtworkIds(artworkIds);
 
   galleryGrid.innerHTML = "";
 
@@ -2666,6 +2722,11 @@ async function renderGallery() {
     const badgeClass = artwork.is_public ? "public-badge" : "private-badge";
     const authorName = artwork.display_name || getDisplayNameFromUser(currentUser);
     const createdText = artwork.created_at ? new Date(artwork.created_at).toLocaleString() : "";
+    const isLikedByCurrentUser = likedArtworkIds.has(artwork.id);
+    const isOwnArtwork = Boolean(currentUser && artwork.user_id === currentUser.id);
+    const likeButtonClass = isLikedByCurrentUser ? "like-btn like-art-btn liked-like-btn" : "like-btn like-art-btn";
+    const likeButtonLabel = isOwnArtwork ? "自己的作品" : isLikedByCurrentUser ? "♥ Liked" : "♡ Like";
+    const likeButtonDisabled = isOwnArtwork ? "disabled" : "";
     const publicBackActions = `
       <div class="card-actions">
         <button class="card-btn detail-btn detail-art-btn" data-id="${escapeAttr(artwork.id)}" type="button">
@@ -2676,8 +2737,8 @@ async function renderGallery() {
         </button>
       </div>
 
-      <button class="like-btn like-art-btn" data-id="${escapeAttr(artwork.id)}" type="button">
-        ♡ Like
+      <button class="${likeButtonClass}" data-id="${escapeAttr(artwork.id)}" type="button" ${likeButtonDisabled}>
+        ${escapeHTML(likeButtonLabel)}
       </button>
 
       <div class="quick-comment-area">
@@ -2724,7 +2785,6 @@ async function renderGallery() {
           <p class="art-meta">${escapeHTML(authorName)} · ${escapeHTML(createdText)}</p>
           <span class="status-badge ${escapeAttr(badgeClass)}">${escapeHTML(badgeText)}</span>
           ${renderReviewStatus(artwork)}
-          ${renderLifecycleStatus(artwork)}
           <p class="like-row">♡ ${escapeHTML(artwork.likes_count || 0)} likes</p>
           <p class="flip-hint">點擊查看作品背面故事</p>
         </div>
@@ -2734,7 +2794,6 @@ async function renderGallery() {
           <p>${escapeHTML(artwork.story || "尚未新增作品說明。")}</p>
           <p class="like-row">♡ ${escapeHTML(artwork.likes_count || 0)} likes</p>
           ${renderReviewStatus(artwork)}
-          ${renderLifecycleStatus(artwork)}
           ${renderAIGeneratedBadge(artwork)}
 
           ${renderCommentSummary(artwork, commentsMap)}
@@ -2759,6 +2818,17 @@ async function renderGallery() {
 async function likeArtworkById(id) {
   if (!currentUser) {
     alert("請先登入後再按 Like。");
+    return;
+  }
+
+  const artwork = await fetchArtworkById(id);
+
+  if (!artwork) {
+    return;
+  }
+
+  if (artwork.user_id === currentUser.id) {
+    alert("不能 Like 自己的作品。");
     return;
   }
 
@@ -3014,9 +3084,7 @@ function isReviewQueueArtwork(artwork) {
   return (
     artwork.review_status === "reviewing" ||
     artwork.review_status === "pending" ||
-    artwork.review_status === "rejected" ||
-    artwork.lifecycle_status === "low_activity" ||
-    artwork.lifecycle_status === "pending_delete"
+    artwork.review_status === "rejected"
   );
 }
 
@@ -3029,11 +3097,11 @@ function getAdminCardClass(artwork) {
     return "admin-card-approved";
   }
 
-  if (artwork.review_status === "rejected" || artwork.lifecycle_status === "pending_delete") {
+  if (artwork.review_status === "rejected") {
     return "admin-card-danger";
   }
 
-  if (artwork.review_status === "pending" || artwork.lifecycle_status === "low_activity") {
+  if (artwork.review_status === "pending") {
     return "admin-card-warning";
   }
 
@@ -3079,7 +3147,6 @@ function renderAdminCard(artwork, mode = "queue") {
   const createdText = artwork.created_at ? new Date(artwork.created_at).toLocaleString() : "—";
   const ownerName = artwork.display_name || "匿名使用者";
   const reviewLabel = artwork.review_status || "private";
-  const lifecycleLabel = artwork.lifecycle_status || "active";
   const visibilityLabel = artwork.is_public ? "Public" : "Private";
   const visibilityClass = artwork.is_public ? "admin-chip-public" : "admin-chip-private";
   let actions = "";
@@ -3136,7 +3203,6 @@ function renderAdminCard(artwork, mode = "queue") {
       <div class="admin-status-row">
         <span class="admin-status-chip ${escapeAttr(visibilityClass)}">${escapeHTML(visibilityLabel)}</span>
         <span class="admin-status-chip ${escapeAttr(getAdminReviewChipClass(artwork))}">${escapeHTML(reviewLabel)}</span>
-        <span class="admin-status-chip ${escapeAttr(getAdminLifecycleChipClass(artwork))}">${escapeHTML(lifecycleLabel)}</span>
       </div>
 
       <div class="admin-card-story">

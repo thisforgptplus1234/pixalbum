@@ -1987,3 +1987,28 @@ footer {
   background: #9b2c2c;
   color: white;
 }
+
+/* =========================
+   Like State Update
+========================= */
+
+.like-btn.liked-like-btn {
+  background: #9b2c2c;
+  color: white;
+  border-color: #9b2c2c;
+  font-weight: bold;
+}
+
+.like-btn.liked-like-btn:hover {
+  background: #7f2222;
+  color: white;
+}
+
+.like-btn:disabled,
+.like-btn.own-like-btn {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #f1f1f1;
+  color: #777;
+  border-color: #c8c8c8;
+}
