@@ -99,6 +99,8 @@ let extractedPaletteColors = [];
 let currentPalettePage = 1;
 
 let currentArtworkIsAIGenerated = false;
+let currentDraftType = "none";
+let currentDraftPrompt = "";
 
 let undoStack = [];
 let redoStack = [];
@@ -303,6 +305,38 @@ function isValidEmailFormat(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function getAuthRedirectUrl() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+async function resendVerificationEmail(email) {
+  const safeEmail = normalizeForSecurity(email);
+
+  if (!safeEmail || !isValidEmailFormat(safeEmail)) {
+    alert("請先輸入有效的 Email。 ");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.resend({
+      type: "signup",
+      email: safeEmail,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl()
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    alert("驗證信已重新寄出。請到信箱點擊驗證連結後再登入。 ");
+  } catch (error) {
+    console.error("Resend verification error:", error);
+    alert(`重新寄送驗證信失敗：${error.message || "Unknown error"}`);
+  }
+}
+
 /* =========================
    Auth
 ========================= */
@@ -488,6 +522,16 @@ async function submitAuthForm() {
       );
 
       if (error) {
+        const message = String(error.message || "").toLowerCase();
+
+        if (message.includes("email not confirmed") || message.includes("confirm")) {
+          const resend = confirm("這個 Email 尚未完成驗證。是否重新寄送驗證信？");
+
+          if (resend) {
+            await resendVerificationEmail(email);
+          }
+        }
+
         throw error;
       }
 
@@ -517,6 +561,7 @@ async function submitAuthForm() {
       email,
       password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           display_name: finalDisplayName
         }
@@ -533,8 +578,17 @@ async function submitAuthForm() {
       throw error;
     }
 
-    currentUser = data.user || null;
     closeAuthModal();
+
+    if (!data.session) {
+      currentUser = null;
+      isAdmin = false;
+      updateAuthNavbar();
+      alert("註冊完成，驗證信已寄出。請先到信箱點擊驗證連結，再回到 Pixalbum 登入。 ");
+      return;
+    }
+
+    currentUser = data.user || null;
 
     if (currentUser) {
       await ensureProfile();
@@ -550,7 +604,7 @@ async function submitAuthForm() {
       await renderAdminPage();
     }
 
-    alert("註冊完成。若 Supabase 要求 Email 驗證，請先到信箱確認。");
+    alert("註冊完成，已登入 Pixalbum。 ");
   } catch (error) {
     console.error("Auth error:", error);
     alert(`${authMode === "signin" ? "登入" : "註冊"}失敗：${error.message || "Unknown error"}`);
@@ -914,6 +968,8 @@ function getCanvasSnapshot() {
     currentTool,
     extractedPaletteColors: [...extractedPaletteColors],
     currentPalettePage,
+    currentDraftType,
+    currentDraftPrompt,
     draftDepth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
     paletteVisible: !palettePanel.classList.contains("hidden-panel"),
     draftToolsVisible: !draftDepthWrapper.classList.contains("hidden-panel")
@@ -945,6 +1001,8 @@ function applyCanvasSnapshot(snapshot) {
 
   extractedPaletteColors = [...(snapshot.extractedPaletteColors || [])];
   currentPalettePage = snapshot.currentPalettePage || 1;
+  currentDraftType = snapshot.currentDraftType || "none";
+  currentDraftPrompt = snapshot.currentDraftPrompt || "";
 
   draftDepthSlider.value = String(snapshot.draftDepth ?? DEFAULT_DRAFT_DEPTH);
   updateDraftDepthLabel();
@@ -1203,6 +1261,8 @@ clearBtn.addEventListener("click", () => {
   pushUndoState();
 
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(Number(sizeSelect.value));
   clearPalette();
@@ -1216,6 +1276,8 @@ sizeSelect.addEventListener("change", event => {
   pushUndoState();
 
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(size);
   clearPalette();
@@ -1507,6 +1569,8 @@ function convertImageToPixelDraft() {
 
     img.onload = function () {
       applyImageElementToPixelDraft(img);
+      currentDraftType = "image";
+      currentDraftPrompt = "";
       alert("圖片已轉換為較清晰的像素參考底稿。");
     };
 
@@ -1637,10 +1701,13 @@ async function generateAIPixelDraft() {
       img.src = `data:image/png;base64,${data.imageBase64}`;
     });
 
+    currentDraftType = "ai";
+    currentDraftPrompt = userPrompt;
+
     aiDraftStatus.className = "ai-draft-status success";
     aiDraftStatus.textContent = `AI 底稿已生成，並已依 ${size} × ${size} 畫布轉為較清晰的像素參考底稿。`;
 
-currentArtworkIsAIGenerated = true;
+    currentArtworkIsAIGenerated = true;
 
 alert("AI 底稿已生成完成。");
   } catch (error) {
@@ -1903,6 +1970,78 @@ function loadPixelDataToCanvas(pixelData) {
   });
 }
 
+function getCurrentDraftData() {
+  const cells = Array.from(document.querySelectorAll(".pixel-cell"));
+  const referenceColors = cells.map(cell => cell.dataset.referenceColor || "");
+  const hasDraft = referenceColors.some(color => color && color.toLowerCase() !== "#ffffff");
+
+  if (!hasDraft) {
+    return null;
+  }
+
+  return {
+    size: Number(sizeSelect.value),
+    colors: referenceColors,
+    type: currentDraftType || "unknown",
+    prompt: currentDraftPrompt || ""
+  };
+}
+
+function applySavedDraftToCanvas(artwork) {
+  const draftData = artwork?.draft_data;
+
+  if (!draftData || !draftData.size || !Array.isArray(draftData.colors)) {
+    currentDraftType = "none";
+    currentDraftPrompt = "";
+    clearPalette();
+    hideDraftTools();
+    return;
+  }
+
+  const currentSize = Number(sizeSelect.value);
+
+  if (Number(draftData.size) !== currentSize) {
+    console.warn("Draft size does not match canvas size. Draft skipped.");
+    currentDraftType = "none";
+    currentDraftPrompt = "";
+    clearPalette();
+    hideDraftTools();
+    return;
+  }
+
+  const cells = document.querySelectorAll(".pixel-cell");
+
+  draftData.colors.forEach((color, index) => {
+    const cell = cells[index];
+
+    if (!cell) {
+      return;
+    }
+
+    cell.dataset.referenceColor = color || "";
+    renderCellDisplay(cell);
+  });
+
+  extractedPaletteColors = Array.isArray(artwork.draft_palette)
+    ? artwork.draft_palette.filter(Boolean)
+    : extractMainColors(draftData.colors.filter(color => color && color.toLowerCase() !== "#ffffff"), 96);
+
+  currentPalettePage = 1;
+  currentDraftType = artwork.draft_type || draftData.type || "unknown";
+  currentDraftPrompt = artwork.draft_prompt || draftData.prompt || "";
+  draftDepthSlider.value = String(artwork.draft_depth ?? DEFAULT_DRAFT_DEPTH);
+
+  if (extractedPaletteColors.length > 0) {
+    renderImagePalettePage();
+  } else {
+    clearPalette();
+  }
+
+  showDraftTools();
+  updateDraftDepthLabel();
+  renderAllCellDisplays();
+}
+
 function hasUserDrawing() {
   const cells = document.querySelectorAll(".pixel-cell");
 
@@ -2051,7 +2190,12 @@ async function createNewArtwork() {
          is_public: false,
          review_status: wantsPublic ? "reviewing" : "private",
          lifecycle_status: "active",
-         ai_generated: currentArtworkIsAIGenerated
+         ai_generated: currentArtworkIsAIGenerated,
+         draft_data: getCurrentDraftData(),
+         draft_palette: extractedPaletteColors,
+         draft_depth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
+         draft_type: currentDraftType,
+         draft_prompt: currentDraftPrompt
       })
       .select()
       .single();
@@ -2117,7 +2261,12 @@ async function updateExistingArtwork() {
         is_public: false,
         review_status: wantsPublic ? "reviewing" : "private",
         lifecycle_status: "active",
-        ai_generated: currentArtworkIsAIGenerated
+        ai_generated: currentArtworkIsAIGenerated,
+        draft_data: getCurrentDraftData(),
+        draft_palette: extractedPaletteColors,
+        draft_depth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
+        draft_type: currentDraftType,
+        draft_prompt: currentDraftPrompt
       })
       .eq("id", editingArtworkId)
       .eq("user_id", currentUser.id)
@@ -2177,6 +2326,7 @@ async function editArtworkById(id) {
   currentArtworkIsAIGenerated = Boolean(data.ai_generated);
 
   loadPixelDataToCanvas(data.pixel_data);
+  applySavedDraftToCanvas(data);
 
   artTitle.value = data.title || "";
   artStory.value = data.story || "";
@@ -2187,8 +2337,10 @@ async function editArtworkById(id) {
   aiDraftStatus.textContent = "";
   aiDraftStatus.className = "ai-draft-status";
 
-  clearPalette();
-  hideDraftTools();
+  if (!data.draft_data) {
+    clearPalette();
+    hideDraftTools();
+  }
 
   undoStack = [];
   redoStack = [];
@@ -2205,6 +2357,8 @@ function resetCreateArea() {
   editingArtworkId = null;
   editingArtworkImagePath = null;
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(Number(sizeSelect.value));
 
