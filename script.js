@@ -70,6 +70,7 @@ const authPassword = document.getElementById("authPassword");
 const authDisplayName = document.getElementById("authDisplayName");
 const displayNameWrapper = document.getElementById("displayNameWrapper");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
+const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
 const authHint = document.getElementById("authHint");
 
 const adminReviewCount = document.getElementById("adminReviewCount");
@@ -337,6 +338,40 @@ async function resendVerificationEmail(email) {
   }
 }
 
+async function sendPasswordResetEmail() {
+  const email = normalizeForSecurity(authEmail.value);
+
+  if (!email || !isValidEmailFormat(email)) {
+    alert("請先在 Email 欄位輸入要重設密碼的信箱。");
+    return;
+  }
+
+  if (forgotPasswordBtn) {
+    forgotPasswordBtn.disabled = true;
+    forgotPasswordBtn.textContent = "Sending reset email...";
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getAuthRedirectUrl()
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    alert("密碼重設信已寄出。請到信箱點擊連結後，再回到 Pixalbum 設定新密碼。");
+  } catch (error) {
+    console.error("Password reset email error:", error);
+    alert(`寄送密碼重設信失敗：${error.message || "Unknown error"}`);
+  } finally {
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.disabled = false;
+      forgotPasswordBtn.textContent = "Forgot password?";
+    }
+  }
+}
+
 async function isEmailAlreadyRegistered(email) {
   const safeEmail = normalizeForSecurity(email).toLowerCase();
 
@@ -496,11 +531,17 @@ function updateAuthMode() {
     signInTab.classList.add("active-auth-tab");
     displayNameWrapper.classList.add("hidden-panel");
     authSubmitBtn.textContent = "Sign In";
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.classList.remove("hidden-panel");
+    }
     authHint.textContent = "Already have an account? Sign in to manage your artworks.";
   } else {
     signUpTab.classList.add("active-auth-tab");
     displayNameWrapper.classList.remove("hidden-panel");
     authSubmitBtn.textContent = "Sign Up";
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.classList.add("hidden-panel");
+    }
     authHint.textContent = "New here? Create an account to start saving artworks.";
   }
 }
@@ -703,6 +744,10 @@ signUpTab.addEventListener("click", () => {
 });
 
 authSubmitBtn.addEventListener("click", submitAuthForm);
+
+if (forgotPasswordBtn) {
+  forgotPasswordBtn.addEventListener("click", sendPasswordResetEmail);
+}
 
 authEmail.addEventListener("keydown", event => {
   if (event.key === "Enter") {

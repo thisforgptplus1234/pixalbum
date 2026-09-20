@@ -1637,6 +1637,30 @@ body {
   width: 100%;
 }
 
+.forgot-password-btn {
+  align-self: center;
+  margin-top: -2px;
+  margin-bottom: -4px;
+  border: none;
+  background: transparent;
+  color: #1f4e79;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.forgot-password-btn:hover {
+  color: #9b2c2c;
+}
+
+.forgot-password-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .auth-hint {
   text-align: center;
   color: #6b7c8f;
