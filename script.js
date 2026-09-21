@@ -1,4 +1,4 @@
-﻿const SUPABASE_URL = "https://krzfyvhxslntiwdimfco.supabase.co";
+const SUPABASE_URL = "https://krzfyvhxslntiwdimfco.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_WOhbbCxJd3rEAi7bHxtM4w_5I5gjYfk";
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1628,7 +1628,7 @@ function applyImageElementToPixelDraft(img) {
 
   extractedPaletteColors = processed.palette;
   currentPalettePage = 1;
-  renderImagePalettePage();
+  renderImagePalettePage({ autoSelectFirst: true });
 
   showDraftTools();
   updateDraftDepthLabel();
@@ -1918,8 +1918,10 @@ function extractMainColors(colors, limit) {
   return diverseColors.slice(0, limit);
 }
 
-function renderImagePalettePage() {
+function renderImagePalettePage(options = {}) {
   imagePalette.innerHTML = "";
+
+  const shouldAutoSelectFirst = options.autoSelectFirst === true;
 
   if (!extractedPaletteColors.length) {
     imagePalette.innerHTML = `<span class="palette-empty">No colors found</span>`;
@@ -1959,7 +1961,7 @@ function renderImagePalettePage() {
     palettePager.classList.add("hidden-panel");
   }
 
-  if (currentPalettePage === 1 && pageColors.length > 0) {
+  if (shouldAutoSelectFirst && currentPalettePage === 1 && pageColors.length > 0) {
     currentColor = pageColors[0];
     colorPicker.value = pageColors[0];
   }
