@@ -70,6 +70,7 @@ const authPassword = document.getElementById("authPassword");
 const authDisplayName = document.getElementById("authDisplayName");
 const displayNameWrapper = document.getElementById("displayNameWrapper");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
+const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
 const authHint = document.getElementById("authHint");
 
 const adminReviewCount = document.getElementById("adminReviewCount");
@@ -99,6 +100,8 @@ let extractedPaletteColors = [];
 let currentPalettePage = 1;
 
 let currentArtworkIsAIGenerated = false;
+let currentDraftType = "none";
+let currentDraftPrompt = "";
 
 let undoStack = [];
 let redoStack = [];
@@ -303,6 +306,96 @@ function isValidEmailFormat(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function getAuthRedirectUrl() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+async function resendVerificationEmail(email) {
+  const safeEmail = normalizeForSecurity(email);
+
+  if (!safeEmail || !isValidEmailFormat(safeEmail)) {
+    alert("請先輸入有效的 Email。");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.resend({
+      type: "signup",
+      email: safeEmail,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl()
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    alert("驗證信已重新寄出。請到信箱點擊驗證連結後再登入。");
+  } catch (error) {
+    console.error("Resend verification error:", error);
+    alert(`重新寄送驗證信失敗：${error.message || "Unknown error"}`);
+  }
+}
+
+async function sendPasswordResetEmail() {
+  const email = normalizeForSecurity(authEmail.value);
+
+  if (!email || !isValidEmailFormat(email)) {
+    alert("請先在 Email 欄位輸入要重設密碼的信箱。");
+    return;
+  }
+
+  if (forgotPasswordBtn) {
+    forgotPasswordBtn.disabled = true;
+    forgotPasswordBtn.textContent = "Sending reset email...";
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getAuthRedirectUrl()
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    alert("密碼重設信已寄出。請到信箱點擊連結後，再回到 Pixalbum 設定新密碼。");
+  } catch (error) {
+    console.error("Password reset email error:", error);
+    alert(`寄送密碼重設信失敗：${error.message || "Unknown error"}`);
+  } finally {
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.disabled = false;
+      forgotPasswordBtn.textContent = "Forgot password?";
+    }
+  }
+}
+
+async function isEmailAlreadyRegistered(email) {
+  const safeEmail = normalizeForSecurity(email).toLowerCase();
+
+  if (!safeEmail || !isValidEmailFormat(safeEmail)) {
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabaseClient.rpc("check_email_registered", {
+      p_email: safeEmail
+    });
+
+    if (error) {
+      console.warn("Check registered email error:", error.message);
+      return false;
+    }
+
+    return Boolean(data);
+  } catch (error) {
+    console.warn("Check registered email exception:", error.message);
+    return false;
+  }
+}
+
 /* =========================
    Auth
 ========================= */
@@ -438,11 +531,17 @@ function updateAuthMode() {
     signInTab.classList.add("active-auth-tab");
     displayNameWrapper.classList.add("hidden-panel");
     authSubmitBtn.textContent = "Sign In";
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.classList.remove("hidden-panel");
+    }
     authHint.textContent = "Already have an account? Sign in to manage your artworks.";
   } else {
     signUpTab.classList.add("active-auth-tab");
     displayNameWrapper.classList.remove("hidden-panel");
     authSubmitBtn.textContent = "Sign Up";
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.classList.add("hidden-panel");
+    }
     authHint.textContent = "New here? Create an account to start saving artworks.";
   }
 }
@@ -488,6 +587,16 @@ async function submitAuthForm() {
       );
 
       if (error) {
+        const message = String(error.message || "").toLowerCase();
+
+        if (message.includes("email not confirmed") || message.includes("confirm")) {
+          const resend = confirm("這個 Email 尚未完成驗證。是否重新寄送驗證信？");
+
+          if (resend) {
+            await resendVerificationEmail(email);
+          }
+        }
+
         throw error;
       }
 
@@ -511,12 +620,20 @@ async function submitAuthForm() {
       return;
     }
 
+    const existingEmail = await isEmailAlreadyRegistered(email);
+
+    if (existingEmail) {
+      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。 ");
+      return;
+    }
+
     const finalDisplayName = displayName || email.split("@")[0];
 
     const signupPromise = supabaseClient.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           display_name: finalDisplayName
         }
@@ -533,8 +650,22 @@ async function submitAuthForm() {
       throw error;
     }
 
-    currentUser = data.user || null;
+    if (data?.user?.identities && data.user.identities.length === 0) {
+      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。");
+      return;
+    }
+
     closeAuthModal();
+
+    if (!data.session) {
+      currentUser = null;
+      isAdmin = false;
+      updateAuthNavbar();
+      alert("註冊完成，驗證信已寄出。請先到信箱點擊驗證連結，再回到 Pixalbum 登入。 ");
+      return;
+    }
+
+    currentUser = data.user || null;
 
     if (currentUser) {
       await ensureProfile();
@@ -550,7 +681,7 @@ async function submitAuthForm() {
       await renderAdminPage();
     }
 
-    alert("註冊完成。若 Supabase 要求 Email 驗證，請先到信箱確認。");
+    alert("註冊完成，已登入 Pixalbum。 ");
   } catch (error) {
     console.error("Auth error:", error);
     alert(`${authMode === "signin" ? "登入" : "註冊"}失敗：${error.message || "Unknown error"}`);
@@ -613,6 +744,10 @@ signUpTab.addEventListener("click", () => {
 });
 
 authSubmitBtn.addEventListener("click", submitAuthForm);
+
+if (forgotPasswordBtn) {
+  forgotPasswordBtn.addEventListener("click", sendPasswordResetEmail);
+}
 
 authEmail.addEventListener("keydown", event => {
   if (event.key === "Enter") {
@@ -839,8 +974,8 @@ galleryGrid.addEventListener("click", async event => {
       return;
     }
 
-    if (button.classList.contains("rating-btn")) {
-      await rateArtworkById(id, Number(button.dataset.score));
+    if (button.classList.contains("report-art-btn")) {
+      await reportArtworkById(id);
       return;
     }
 
@@ -914,6 +1049,8 @@ function getCanvasSnapshot() {
     currentTool,
     extractedPaletteColors: [...extractedPaletteColors],
     currentPalettePage,
+    currentDraftType,
+    currentDraftPrompt,
     draftDepth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
     paletteVisible: !palettePanel.classList.contains("hidden-panel"),
     draftToolsVisible: !draftDepthWrapper.classList.contains("hidden-panel")
@@ -921,8 +1058,8 @@ function getCanvasSnapshot() {
 }
 
 function applyCanvasSnapshot(snapshot) {
-  // Undo / Redo 只還原畫布與底稿狀態，不改變使用者目前選取的筆刷顏色與工具。
-  // 這樣使用 Undo 後，筆刷不會被還原成舊快照裡的白色或預設色。
+  // Undo / Redo 只還原畫布內容與底稿狀態，不改變使用者目前選取的筆刷顏色與工具。
+  // 避免使用 Undo 後，筆刷顏色被還原成舊快照中的白色或預設色。
   const preservedColor = currentColor || colorPicker.value || "#1f4e79";
   const preservedTool = currentTool || "brush";
 
@@ -945,8 +1082,14 @@ function applyCanvasSnapshot(snapshot) {
     cell.dataset.hasUserPaint = cellData.hasUserPaint || "false";
   });
 
+  currentColor = preservedColor;
+  colorPicker.value = preservedColor;
+  updateSelectedPaletteColor(preservedColor);
+
   extractedPaletteColors = [...(snapshot.extractedPaletteColors || [])];
   currentPalettePage = snapshot.currentPalettePage || 1;
+  currentDraftType = snapshot.currentDraftType || "none";
+  currentDraftPrompt = snapshot.currentDraftPrompt || "";
 
   draftDepthSlider.value = String(snapshot.draftDepth ?? DEFAULT_DRAFT_DEPTH);
   updateDraftDepthLabel();
@@ -969,11 +1112,7 @@ function applyCanvasSnapshot(snapshot) {
     clearPalette();
   }
 
-  currentColor = preservedColor;
-  colorPicker.value = preservedColor;
-  updateSelectedPaletteColor(preservedColor);
   setTool(preservedTool);
-
   renderAllCellDisplays();
   updateHistoryButtons();
 }
@@ -1209,6 +1348,8 @@ clearBtn.addEventListener("click", () => {
   pushUndoState();
 
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(Number(sizeSelect.value));
   clearPalette();
@@ -1222,6 +1363,8 @@ sizeSelect.addEventListener("change", event => {
   pushUndoState();
 
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(size);
   clearPalette();
@@ -1513,6 +1656,8 @@ function convertImageToPixelDraft() {
 
     img.onload = function () {
       applyImageElementToPixelDraft(img);
+      currentDraftType = "image";
+      currentDraftPrompt = "";
       alert("圖片已轉換為較清晰的像素參考底稿。");
     };
 
@@ -1643,10 +1788,13 @@ async function generateAIPixelDraft() {
       img.src = `data:image/png;base64,${data.imageBase64}`;
     });
 
+    currentDraftType = "ai";
+    currentDraftPrompt = userPrompt;
+
     aiDraftStatus.className = "ai-draft-status success";
     aiDraftStatus.textContent = `AI 底稿已生成，並已依 ${size} × ${size} 畫布轉為較清晰的像素參考底稿。`;
 
-currentArtworkIsAIGenerated = true;
+    currentArtworkIsAIGenerated = true;
 
 alert("AI 底稿已生成完成。");
   } catch (error) {
@@ -1909,6 +2057,78 @@ function loadPixelDataToCanvas(pixelData) {
   });
 }
 
+function getCurrentDraftData() {
+  const cells = Array.from(document.querySelectorAll(".pixel-cell"));
+  const referenceColors = cells.map(cell => cell.dataset.referenceColor || "");
+  const hasDraft = referenceColors.some(color => color && color.toLowerCase() !== "#ffffff");
+
+  if (!hasDraft) {
+    return null;
+  }
+
+  return {
+    size: Number(sizeSelect.value),
+    colors: referenceColors,
+    type: currentDraftType || "unknown",
+    prompt: currentDraftPrompt || ""
+  };
+}
+
+function applySavedDraftToCanvas(artwork) {
+  const draftData = artwork?.draft_data;
+
+  if (!draftData || !draftData.size || !Array.isArray(draftData.colors)) {
+    currentDraftType = "none";
+    currentDraftPrompt = "";
+    clearPalette();
+    hideDraftTools();
+    return;
+  }
+
+  const currentSize = Number(sizeSelect.value);
+
+  if (Number(draftData.size) !== currentSize) {
+    console.warn("Draft size does not match canvas size. Draft skipped.");
+    currentDraftType = "none";
+    currentDraftPrompt = "";
+    clearPalette();
+    hideDraftTools();
+    return;
+  }
+
+  const cells = document.querySelectorAll(".pixel-cell");
+
+  draftData.colors.forEach((color, index) => {
+    const cell = cells[index];
+
+    if (!cell) {
+      return;
+    }
+
+    cell.dataset.referenceColor = color || "";
+    renderCellDisplay(cell);
+  });
+
+  extractedPaletteColors = Array.isArray(artwork.draft_palette)
+    ? artwork.draft_palette.filter(Boolean)
+    : extractMainColors(draftData.colors.filter(color => color && color.toLowerCase() !== "#ffffff"), 96);
+
+  currentPalettePage = 1;
+  currentDraftType = artwork.draft_type || draftData.type || "unknown";
+  currentDraftPrompt = artwork.draft_prompt || draftData.prompt || "";
+  draftDepthSlider.value = String(artwork.draft_depth ?? DEFAULT_DRAFT_DEPTH);
+
+  if (extractedPaletteColors.length > 0) {
+    renderImagePalettePage();
+  } else {
+    clearPalette();
+  }
+
+  showDraftTools();
+  updateDraftDepthLabel();
+  renderAllCellDisplays();
+}
+
 function hasUserDrawing() {
   const cells = document.querySelectorAll(".pixel-cell");
 
@@ -2057,7 +2277,12 @@ async function createNewArtwork() {
          is_public: false,
          review_status: wantsPublic ? "reviewing" : "private",
          lifecycle_status: "active",
-         ai_generated: currentArtworkIsAIGenerated
+         ai_generated: currentArtworkIsAIGenerated,
+         draft_data: getCurrentDraftData(),
+         draft_palette: extractedPaletteColors,
+         draft_depth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
+         draft_type: currentDraftType,
+         draft_prompt: currentDraftPrompt
       })
       .select()
       .single();
@@ -2123,7 +2348,12 @@ async function updateExistingArtwork() {
         is_public: false,
         review_status: wantsPublic ? "reviewing" : "private",
         lifecycle_status: "active",
-        ai_generated: currentArtworkIsAIGenerated
+        ai_generated: currentArtworkIsAIGenerated,
+        draft_data: getCurrentDraftData(),
+        draft_palette: extractedPaletteColors,
+        draft_depth: Number(draftDepthSlider.value || DEFAULT_DRAFT_DEPTH),
+        draft_type: currentDraftType,
+        draft_prompt: currentDraftPrompt
       })
       .eq("id", editingArtworkId)
       .eq("user_id", currentUser.id)
@@ -2183,6 +2413,7 @@ async function editArtworkById(id) {
   currentArtworkIsAIGenerated = Boolean(data.ai_generated);
 
   loadPixelDataToCanvas(data.pixel_data);
+  applySavedDraftToCanvas(data);
 
   artTitle.value = data.title || "";
   artStory.value = data.story || "";
@@ -2193,8 +2424,10 @@ async function editArtworkById(id) {
   aiDraftStatus.textContent = "";
   aiDraftStatus.className = "ai-draft-status";
 
-  clearPalette();
-  hideDraftTools();
+  if (!data.draft_data) {
+    clearPalette();
+    hideDraftTools();
+  }
 
   undoStack = [];
   redoStack = [];
@@ -2211,6 +2444,8 @@ function resetCreateArea() {
   editingArtworkId = null;
   editingArtworkImagePath = null;
   currentArtworkIsAIGenerated = false;
+  currentDraftType = "none";
+  currentDraftPrompt = "";
 
   createCanvas(Number(sizeSelect.value));
 
@@ -2308,7 +2543,7 @@ function renderLifecycleStatus(artwork) {
 }
 
 function renderFeaturedRibbon(artwork) {
-  if (!artwork.featured && artwork.lifecycle_status !== "featured") {
+  if (!artwork.featured) {
     return "";
   }
 
@@ -2341,6 +2576,25 @@ async function getTopCommentsMap(artworkIds) {
   });
 
   return map;
+}
+
+async function getLikedArtworkIds(artworkIds) {
+  if (!currentUser || !artworkIds.length) {
+    return new Set();
+  }
+
+  const { data, error } = await supabaseClient
+    .from("likes")
+    .select("artwork_id")
+    .eq("user_id", currentUser.id)
+    .in("artwork_id", artworkIds);
+
+  if (error) {
+    console.warn("Get liked artworks error:", error.message);
+    return new Set();
+  }
+
+  return new Set((data || []).map(row => row.artwork_id));
 }
 
 function getTopCommentsFromMap(commentMapForArtwork, limit = 3) {
@@ -2412,14 +2666,33 @@ function renderQuickCommentButtons(artworkId) {
   }).join("");
 }
 
-function renderRatingButtons(artworkId) {
-  return [1, 2, 3, 4, 5].map(score => {
-    return `
-      <button class="rating-btn" data-id="${escapeAttr(artworkId)}" data-score="${score}" type="button">
-        ${score}★
-      </button>
-    `;
-  }).join("");
+const reportReasonOptions = [
+  "不當文字或圖像",
+  "攻擊或辱罵內容",
+  "色情或裸露暗示",
+  "暴力、自傷或危險內容",
+  "仇恨或歧視內容",
+  "其他"
+];
+
+function buildReportReasonMessage() {
+  return reportReasonOptions
+    .map((reason, index) => `${index + 1}. ${reason}`)
+    .join("\n");
+}
+
+function renderAIGeneratedBadge(artwork) {
+  if (!artwork.ai_generated) {
+    return "";
+  }
+
+  return `
+    <div class="story-badge-row">
+      <span class="story-badge ai-badge">
+        <span class="ai-badge-label">AI Generated</span>
+      </span>
+    </div>
+  `;
 }
 
 async function getVisibleArtworks() {
@@ -2436,7 +2709,6 @@ async function getVisibleArtworks() {
       query = query
         .order("featured", { ascending: false })
         .order("likes_count", { ascending: false })
-        .order("ratings_avg", { ascending: false })
         .order("comments_count", { ascending: false })
         .order("created_at", { ascending: false });
     }
@@ -2473,6 +2745,7 @@ async function renderGallery() {
   const artworks = await getVisibleArtworks();
   const artworkIds = artworks.map(artwork => artwork.id);
   const commentsMap = await getTopCommentsMap(artworkIds);
+  const likedArtworkIds = await getLikedArtworkIds(artworkIds);
 
   galleryGrid.innerHTML = "";
 
@@ -2500,27 +2773,24 @@ async function renderGallery() {
     const badgeClass = artwork.is_public ? "public-badge" : "private-badge";
     const authorName = artwork.display_name || getDisplayNameFromUser(currentUser);
     const createdText = artwork.created_at ? new Date(artwork.created_at).toLocaleString() : "";
-    const ratingText = Number(artwork.ratings_avg || 0) > 0
-      ? `${Number(artwork.ratings_avg).toFixed(1)} / 5`
-      : "尚無評分";
-
+    const isLikedByCurrentUser = likedArtworkIds.has(artwork.id);
+    const isOwnArtwork = Boolean(currentUser && artwork.user_id === currentUser.id);
+    const likeButtonClass = isLikedByCurrentUser ? "like-btn like-art-btn liked-like-btn" : "like-btn like-art-btn";
+    const likeButtonLabel = isOwnArtwork ? "自己的作品" : isLikedByCurrentUser ? "♥ Liked" : "♡ Like";
+    const likeButtonDisabled = isOwnArtwork ? "disabled" : "";
     const publicBackActions = `
       <div class="card-actions">
         <button class="card-btn detail-btn detail-art-btn" data-id="${escapeAttr(artwork.id)}" type="button">
           查看詳情
         </button>
+        <button class="card-btn report-btn report-art-btn" data-id="${escapeAttr(artwork.id)}" type="button">
+          檢舉作品
+        </button>
       </div>
 
-      <button class="like-btn like-art-btn" data-id="${escapeAttr(artwork.id)}" type="button">
-        ♡ Like
+      <button class="${likeButtonClass}" data-id="${escapeAttr(artwork.id)}" type="button" ${likeButtonDisabled}>
+        ${escapeHTML(likeButtonLabel)}
       </button>
-
-      <div class="rating-area">
-        <h4>快速評分</h4>
-        <div class="rating-buttons">
-          ${renderRatingButtons(artwork.id)}
-        </div>
-      </div>
 
       <div class="quick-comment-area">
         <h4>快捷留言</h4>
@@ -2566,9 +2836,7 @@ async function renderGallery() {
           <p class="art-meta">${escapeHTML(authorName)} · ${escapeHTML(createdText)}</p>
           <span class="status-badge ${escapeAttr(badgeClass)}">${escapeHTML(badgeText)}</span>
           ${renderReviewStatus(artwork)}
-          ${renderLifecycleStatus(artwork)}
           <p class="like-row">♡ ${escapeHTML(artwork.likes_count || 0)} likes</p>
-          <p class="rating-row">★ ${escapeHTML(ratingText)}</p>
           <p class="flip-hint">點擊查看作品背面故事</p>
         </div>
 
@@ -2576,9 +2844,8 @@ async function renderGallery() {
           <h3>${escapeHTML(artwork.title || "Untitled Artwork")}</h3>
           <p>${escapeHTML(artwork.story || "尚未新增作品說明。")}</p>
           <p class="like-row">♡ ${escapeHTML(artwork.likes_count || 0)} likes</p>
-          <p class="rating-row">★ ${escapeHTML(ratingText)}</p>
           ${renderReviewStatus(artwork)}
-          ${renderLifecycleStatus(artwork)}
+          ${renderAIGeneratedBadge(artwork)}
 
           ${renderCommentSummary(artwork, commentsMap)}
 
@@ -2605,6 +2872,17 @@ async function likeArtworkById(id) {
     return;
   }
 
+  const artwork = await fetchArtworkById(id);
+
+  if (!artwork) {
+    return;
+  }
+
+  if (artwork.user_id === currentUser.id) {
+    alert("不能 Like 自己的作品。");
+    return;
+  }
+
   const { error } = await supabaseClient
     .from("likes")
     .insert({
@@ -2628,38 +2906,60 @@ async function likeArtworkById(id) {
   }
 }
 
-async function rateArtworkById(id, score) {
+async function reportArtworkById(id) {
   if (!currentUser) {
-    alert("請先登入後再評分。");
+    alert("請先登入後再檢舉作品。");
     return;
   }
 
-  const safeScore = Number(score);
+  const input = prompt(
+    `請輸入檢舉原因編號，或直接輸入補充說明：\n${buildReportReasonMessage()}`
+  );
 
-  if (!Number.isInteger(safeScore) || safeScore < 1 || safeScore > 5) {
-    alert("評分數值不正確。");
+  if (input === null) {
     return;
   }
 
-  const { error } = await supabaseClient
-    .from("ratings")
-    .upsert({
-      artwork_id: id,
-      user_id: currentUser.id,
-      score: safeScore
-    }, {
-      onConflict: "artwork_id,user_id"
+  const trimmedInput = normalizeForSecurity(input);
+
+  if (!trimmedInput) {
+    alert("請輸入檢舉原因。");
+    return;
+  }
+
+  let reason = trimmedInput;
+  const reasonIndex = Number(trimmedInput);
+
+  if (Number.isInteger(reasonIndex) && reasonIndex >= 1 && reasonIndex <= reportReasonOptions.length) {
+    reason = reportReasonOptions[reasonIndex - 1];
+  }
+
+  const reasonValidation = validatePlainTextField(reason, "檢舉原因", 120, { required: true });
+
+  if (!reasonValidation.ok) {
+    alert(reasonValidation.message);
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.rpc("submit_artwork_report", {
+      p_artwork_id: id,
+      p_reason: reasonValidation.value
     });
 
-  if (error) {
-    alert(`評分失敗：${error.message}`);
-    return;
-  }
+    if (error) {
+      throw error;
+    }
 
-  await renderGallery();
+    alert("檢舉已送出，作品將交由管理者人工審核。");
+    await renderGallery();
 
-  if (isAdmin) {
-    await renderAdminPage();
+    if (isAdmin) {
+      await renderAdminPage();
+    }
+  } catch (error) {
+    console.error("Report artwork error:", error);
+    alert(`檢舉失敗：${error.message || "Unknown error"}`);
   }
 }
 
@@ -2835,9 +3135,7 @@ function isReviewQueueArtwork(artwork) {
   return (
     artwork.review_status === "reviewing" ||
     artwork.review_status === "pending" ||
-    artwork.review_status === "rejected" ||
-    artwork.lifecycle_status === "low_activity" ||
-    artwork.lifecycle_status === "pending_delete"
+    artwork.review_status === "rejected"
   );
 }
 
@@ -2850,11 +3148,11 @@ function getAdminCardClass(artwork) {
     return "admin-card-approved";
   }
 
-  if (artwork.review_status === "rejected" || artwork.lifecycle_status === "pending_delete") {
+  if (artwork.review_status === "rejected") {
     return "admin-card-danger";
   }
 
-  if (artwork.review_status === "pending" || artwork.lifecycle_status === "low_activity") {
+  if (artwork.review_status === "pending") {
     return "admin-card-warning";
   }
 
@@ -2900,13 +3198,8 @@ function renderAdminCard(artwork, mode = "queue") {
   const createdText = artwork.created_at ? new Date(artwork.created_at).toLocaleString() : "—";
   const ownerName = artwork.display_name || "匿名使用者";
   const reviewLabel = artwork.review_status || "private";
-  const lifecycleLabel = artwork.lifecycle_status || "active";
   const visibilityLabel = artwork.is_public ? "Public" : "Private";
   const visibilityClass = artwork.is_public ? "admin-chip-public" : "admin-chip-private";
-  const ratingText = Number(artwork.ratings_avg || 0) > 0
-    ? Number(artwork.ratings_avg).toFixed(1)
-    : "—";
-
   let actions = "";
 
   if (mode === "queue") {
@@ -2961,7 +3254,6 @@ function renderAdminCard(artwork, mode = "queue") {
       <div class="admin-status-row">
         <span class="admin-status-chip ${escapeAttr(visibilityClass)}">${escapeHTML(visibilityLabel)}</span>
         <span class="admin-status-chip ${escapeAttr(getAdminReviewChipClass(artwork))}">${escapeHTML(reviewLabel)}</span>
-        <span class="admin-status-chip ${escapeAttr(getAdminLifecycleChipClass(artwork))}">${escapeHTML(lifecycleLabel)}</span>
       </div>
 
       <div class="admin-card-story">
@@ -2970,7 +3262,6 @@ function renderAdminCard(artwork, mode = "queue") {
 
       <div class="admin-stats">
         <span>♡ ${escapeHTML(artwork.likes_count || 0)}</span>
-        <span>★ ${escapeHTML(ratingText)}</span>
         <span>💬 ${escapeHTML(artwork.comments_count || 0)}</span>
       </div>
 
