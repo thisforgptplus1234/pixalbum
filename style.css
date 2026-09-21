@@ -1637,30 +1637,6 @@ body {
   width: 100%;
 }
 
-.forgot-password-btn {
-  align-self: center;
-  margin-top: -2px;
-  margin-bottom: -4px;
-  border: none;
-  background: transparent;
-  color: #1f4e79;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.forgot-password-btn:hover {
-  color: #9b2c2c;
-}
-
-.forgot-password-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .auth-hint {
   text-align: center;
   color: #6b7c8f;
@@ -1996,43 +1972,4 @@ footer {
 
 .ai-badge-label {
   line-height: 1;
-}
-
-/* =========================
-   Report Button
-========================= */
-
-.report-btn {
-  border-color: #9b2c2c;
-  color: #9b2c2c;
-}
-
-.report-btn:hover {
-  background: #9b2c2c;
-  color: white;
-}
-
-/* =========================
-   Like State Update
-========================= */
-
-.like-btn.liked-like-btn {
-  background: #9b2c2c;
-  color: white;
-  border-color: #9b2c2c;
-  font-weight: bold;
-}
-
-.like-btn.liked-like-btn:hover {
-  background: #7f2222;
-  color: white;
-}
-
-.like-btn:disabled,
-.like-btn.own-like-btn {
-  opacity: 0.55;
-  cursor: not-allowed;
-  background: #f1f1f1;
-  color: #777;
-  border-color: #c8c8c8;
 }
