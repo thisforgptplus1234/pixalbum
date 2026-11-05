@@ -1,4 +1,4 @@
-﻿* {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -520,12 +520,21 @@ body {
   background: #fbf7ef;
   border: 8px solid #eadfc7;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  /* Disable panning/zooming ONLY while interacting with the drawing canvas. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: crosshair;
 }
 
 .pixel-cell {
   border: 1px solid rgba(31, 51, 71, 0.08);
   background: #ffffff;
   box-sizing: border-box;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* =========================

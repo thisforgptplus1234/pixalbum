@@ -90,7 +90,8 @@ let currentUser = null;
 let isAdmin = false;
 let currentColor = colorPicker.value;
 let currentTool = "brush";
-let isMouseDown = false;
+let activeDrawingPointerId = null;
+let lastDrawingCellIndex = null;
 let currentGalleryMode = "public";
 let currentPublicFilter = "all";
 let editingArtworkId = null;
@@ -1206,29 +1207,122 @@ function createCanvas(size) {
     cell.dataset.hasUserPaint = "false";
     cell.style.backgroundColor = "#ffffff";
 
-    cell.addEventListener("mousedown", () => {
-      isMouseDown = true;
-
-      if (currentTool === "brush" || currentTool === "eraser" || currentTool === "bucket") {
-        pushUndoState();
-      }
-
-      handleCellAction(cell);
-    });
-
-    cell.addEventListener("mouseover", () => {
-      if (isMouseDown && (currentTool === "brush" || currentTool === "eraser")) {
-        handleCellAction(cell);
-      }
-    });
-
-    cell.addEventListener("mouseup", () => {
-      isMouseDown = false;
-    });
-
     canvas.appendChild(cell);
   }
 }
+
+/* =========================
+   Mobile & Desktop Canvas Drawing
+   Pointer Events work with mouse, touch and stylus.
+   Page scrolling stays enabled outside #pixelCanvas.
+========================= */
+
+function getDrawingCellAtPoint(clientX, clientY) {
+  const element = document.elementFromPoint(clientX, clientY);
+  if (!element) return null;
+
+  const cell = element.closest(".pixel-cell");
+  return cell && canvas.contains(cell) ? cell : null;
+}
+
+function drawLineBetweenCells(fromIndex, toIndex) {
+  const size = Number(sizeSelect.value);
+  const cells = canvas.children;
+  let x0 = fromIndex % size;
+  let y0 = Math.floor(fromIndex / size);
+  const x1 = toIndex % size;
+  const y1 = Math.floor(toIndex / size);
+
+  // Bresenham interpolation prevents gaps when a finger moves fast,
+  // especially with 32x32 / 64x64 pixel grids.
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let error = dx - dy;
+
+  while (true) {
+    const cell = cells[y0 * size + x0];
+    if (cell) handleCellAction(cell);
+    if (x0 === x1 && y0 === y1) break;
+
+    const doubledError = 2 * error;
+    if (doubledError > -dy) {
+      error -= dy;
+      x0 += sx;
+    }
+    if (doubledError < dx) {
+      error += dx;
+      y0 += sy;
+    }
+  }
+}
+
+function finishDrawingPointer(event) {
+  if (event.pointerId !== activeDrawingPointerId) return;
+
+  activeDrawingPointerId = null;
+  lastDrawingCellIndex = null;
+
+  if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+    canvas.releasePointerCapture(event.pointerId);
+  }
+}
+
+canvas.addEventListener("pointerdown", event => {
+  // Ignore secondary mouse buttons and additional fingers.
+  if ((event.pointerType === "mouse" && event.button !== 0) ||
+      event.isPrimary === false || activeDrawingPointerId !== null) return;
+
+  const cell = getDrawingCellAtPoint(event.clientX, event.clientY);
+  if (!cell) return;
+
+  event.preventDefault(); // Prevent touch selection and compatibility mouse actions.
+  activeDrawingPointerId = event.pointerId;
+  lastDrawingCellIndex = Number(cell.dataset.index);
+
+  if (currentTool === "brush" || currentTool === "eraser" || currentTool === "bucket") {
+    // One Undo step per continuous finger / pen / mouse stroke.
+    pushUndoState();
+  }
+
+  handleCellAction(cell);
+
+  // Keep receiving events if the finger briefly crosses cell boundaries.
+  if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener("pointermove", event => {
+  if (event.pointerId !== activeDrawingPointerId) return;
+  if (currentTool !== "brush" && currentTool !== "eraser") return;
+
+  // If the mouse button was released outside the browser, end the stroke.
+  if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
+    finishDrawingPointer(event);
+    return;
+  }
+
+  // Pointer capture keeps event delivery consistent; elementFromPoint still
+  // locates the real grid cell beneath the finger or stylus.
+  const cell = getDrawingCellAtPoint(event.clientX, event.clientY);
+  if (!cell) {
+    lastDrawingCellIndex = null; // Don't connect strokes across areas outside the canvas.
+    return;
+  }
+
+  const currentIndex = Number(cell.dataset.index);
+  if (lastDrawingCellIndex === null) {
+    handleCellAction(cell);
+  } else if (lastDrawingCellIndex !== currentIndex) {
+    drawLineBetweenCells(lastDrawingCellIndex, currentIndex);
+  }
+  lastDrawingCellIndex = currentIndex;
+});
+
+canvas.addEventListener("pointerup", finishDrawingPointer);
+canvas.addEventListener("pointercancel", finishDrawingPointer);
+canvas.addEventListener("lostpointercapture", finishDrawingPointer);
+canvas.addEventListener("contextmenu", event => event.preventDefault());
 
 function handleCellAction(cell) {
   if (currentTool === "brush") {
@@ -1333,10 +1427,6 @@ function bucketFill(startCell) {
     });
   }
 }
-
-document.body.addEventListener("mouseup", () => {
-  isMouseDown = false;
-});
 
 colorPicker.addEventListener("input", event => {
   currentColor = event.target.value;
