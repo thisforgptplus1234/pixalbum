@@ -307,6 +307,24 @@ function isValidEmailFormat(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function safeArtworkImageSource(artwork) {
+  // 防止資料庫中的 image_url 被惡意竄改為 javascript:、data:text/html 或第三方追蹤網址。
+  const raw = typeof artwork?.image_url === "string" ? artwork.image_url.trim() : "";
+  if (raw) {
+    try {
+      const url = new URL(raw);
+      const allowedHost = new URL(SUPABASE_URL).host;
+      const allowedPathPrefix = "/storage/v1/object/public/artworks/";
+      if (url.protocol === "https:" && url.host === allowedHost && url.pathname.startsWith(allowedPathPrefix)) {
+        return raw;
+      }
+    } catch (error) {
+      // 非法或不受信任的圖片網址，改由已儲存的像素資料產生預覽。
+    }
+  }
+  return pixelDataToImage(artwork?.pixel_data);
+}
+
 function getAuthRedirectUrl() {
   return `${window.location.origin}${window.location.pathname}`;
 }
@@ -373,29 +391,6 @@ async function sendPasswordResetEmail() {
   }
 }
 
-async function isEmailAlreadyRegistered(email) {
-  const safeEmail = normalizeForSecurity(email).toLowerCase();
-
-  if (!safeEmail || !isValidEmailFormat(safeEmail)) {
-    return false;
-  }
-
-  try {
-    const { data, error } = await supabaseClient.rpc("check_email_registered", {
-      p_email: safeEmail
-    });
-
-    if (error) {
-      console.warn("Check registered email error:", error.message);
-      return false;
-    }
-
-    return Boolean(data);
-  } catch (error) {
-    console.warn("Check registered email exception:", error.message);
-    return false;
-  }
-}
 
 /* =========================
    Auth
@@ -621,13 +616,6 @@ async function submitAuthForm() {
       return;
     }
 
-    const existingEmail = await isEmailAlreadyRegistered(email);
-
-    if (existingEmail) {
-      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。 ");
-      return;
-    }
-
     const finalDisplayName = displayName || email.split("@")[0];
 
     const signupPromise = supabaseClient.auth.signUp({
@@ -651,18 +639,13 @@ async function submitAuthForm() {
       throw error;
     }
 
-    if (data?.user?.identities && data.user.identities.length === 0) {
-      alert("此 Email 已經註冊過，請直接 Sign In，或使用忘記密碼流程。");
-      return;
-    }
-
     closeAuthModal();
 
     if (!data.session) {
       currentUser = null;
       isAdmin = false;
       updateAuthNavbar();
-      alert("註冊完成，驗證信已寄出。請先到信箱點擊驗證連結，再回到 Pixalbum 登入。 ");
+      alert("如果此信箱可以註冊，系統會寄送驗證信。請檢查信箱；若你已註冊，請改用 Sign In 或忘記密碼功能。");
       return;
     }
 
@@ -909,7 +892,7 @@ filterButtons.forEach(button => {
 ========================= */
 
 function openArtworkModal(artwork) {
-  modalArtworkImage.src = artwork.image_url || pixelDataToImage(artwork.pixel_data);
+  modalArtworkImage.src = safeArtworkImageSource(artwork);
   modalArtworkTitle.textContent = artwork.title || "Untitled Artwork";
 
   const author = artwork.display_name || artwork.author_name || "匿名使用者";
@@ -2234,7 +2217,10 @@ function pixelDataToImage(pixelData) {
     return "";
   }
 
-  const size = pixelData.size;
+  const size = Number(pixelData.size);
+  if (![16, 32, 64].includes(size) || pixelData.colors.length !== size * size) {
+    return "";
+  }
   const scale = 12;
 
   const previewCanvas = document.createElement("canvas");
@@ -2859,7 +2845,7 @@ async function renderGallery() {
     const card = document.createElement("div");
     card.classList.add("art-card");
 
-    const imageUrl = artwork.image_url || pixelDataToImage(artwork.pixel_data);
+    const imageUrl = safeArtworkImageSource(artwork);
     const safeImageUrl = escapeAttr(imageUrl);
     const badgeText = artwork.is_public ? "Public" : "Private";
     const badgeClass = artwork.is_public ? "public-badge" : "private-badge";
@@ -3043,7 +3029,7 @@ async function reportArtworkById(id) {
       throw error;
     }
 
-    alert("檢舉已送出，作品將交由管理者人工審核。");
+    alert("檢舉已送出，管理者將人工審查。檢舉不會自動將他人的作品下架。");
     await renderGallery();
 
     if (isAdmin) {
@@ -3192,7 +3178,12 @@ async function downloadArtworkById(id) {
     return;
   }
 
-  const imageUrl = artwork.image_url || pixelDataToImage(artwork.pixel_data);
+  const imageUrl = safeArtworkImageSource(artwork);
+
+  if (!imageUrl) {
+    alert("作品圖片網址無效，無法下載。");
+    return;
+  }
 
   const link = document.createElement("a");
   link.download = `${sanitizeFileName(artwork.title || "pixalbum_artwork")}.png`;
@@ -3227,7 +3218,8 @@ function isReviewQueueArtwork(artwork) {
   return (
     artwork.review_status === "reviewing" ||
     artwork.review_status === "pending" ||
-    artwork.review_status === "rejected"
+    artwork.review_status === "rejected" ||
+    Number(artwork.report_count || 0) > 0
   );
 }
 
@@ -3286,7 +3278,7 @@ function truncateText(text, maxLength = 120) {
 }
 
 function renderAdminCard(artwork, mode = "queue") {
-  const imageUrl = artwork.image_url || pixelDataToImage(artwork.pixel_data);
+  const imageUrl = safeArtworkImageSource(artwork);
   const createdText = artwork.created_at ? new Date(artwork.created_at).toLocaleString() : "—";
   const ownerName = artwork.display_name || "匿名使用者";
   const reviewLabel = artwork.review_status || "private";
@@ -3357,6 +3349,13 @@ function renderAdminCard(artwork, mode = "queue") {
         <span>💬 ${escapeHTML(artwork.comments_count || 0)}</span>
       </div>
 
+      ${Number(artwork.report_count || 0) > 0 ? `
+        <div class="admin-report-alert">
+          <strong>待處理檢舉：${Number(artwork.report_count)} 則</strong>
+          <ul>${(artwork.report_reasons || []).map(reason => `<li>${escapeHTML(reason)}</li>`).join("")}</ul>
+        </div>
+      ` : ""}
+
       <div class="admin-actions">
         <button class="admin-action-btn" data-admin-action="detail" data-id="${escapeAttr(artwork.id)}" type="button">
           Detail
@@ -3382,7 +3381,29 @@ async function fetchAdminArtworks() {
     return [];
   }
 
-  return data || [];
+  // 檢舉案件只供管理者查詢；不因單一檢舉自動下架作品。
+  const { data: openReports, error: reportError } = await supabaseClient
+    .from("reports")
+    .select("artwork_id, reason, created_at")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (reportError) {
+    console.warn("Admin reports read error:", reportError.message);
+    return data || [];
+  }
+
+  const reportMap = new Map();
+  (openReports || []).forEach(report => {
+    if (!reportMap.has(report.artwork_id)) reportMap.set(report.artwork_id, []);
+    reportMap.get(report.artwork_id).push(report.reason || "未填原因");
+  });
+
+  return (data || []).map(artwork => {
+    const reasons = reportMap.get(artwork.id) || [];
+    return { ...artwork, report_count: reasons.length, report_reasons: reasons.slice(0, 3) };
+  });
 }
 
 function renderAdminGrid(gridElement, artworks, mode, emptyMessage) {
@@ -3440,6 +3461,17 @@ async function renderAdminPage() {
   );
 }
 
+async function markArtworkReportsReviewed(id) {
+  const { error } = await supabaseClient
+    .from("reports")
+    .update({ status: "reviewed", updated_at: new Date().toISOString() })
+    .eq("artwork_id", id)
+    .eq("status", "open");
+  if (error) {
+    console.warn("Could not mark reports reviewed:", error.message);
+  }
+}
+
 async function adminApproveArtwork(id) {
   if (!isAdmin) {
     alert("你沒有管理者權限。");
@@ -3461,6 +3493,7 @@ async function adminApproveArtwork(id) {
     return;
   }
 
+  await markArtworkReportsReviewed(id);
   await refreshAdminAndGallery();
 }
 
@@ -3485,6 +3518,7 @@ async function adminRejectArtwork(id) {
     return;
   }
 
+  await markArtworkReportsReviewed(id);
   await refreshAdminAndGallery();
 }
 
@@ -3509,6 +3543,7 @@ async function adminHideArtwork(id) {
     return;
   }
 
+  await markArtworkReportsReviewed(id);
   await refreshAdminAndGallery();
 }
 
