@@ -400,9 +400,15 @@ async function sendPasswordResetEmail() {
    Auth
 ========================= */
 
+function isAnonymousUser(user = currentUser) {
+  return Boolean(user && (
+    user.is_anonymous === true || user.app_metadata?.provider === "anonymous"
+  ));
+}
+
 function getDisplayNameFromUser(user) {
-  if (!user) {
-    return "匿名使用者";
+  if (!user || isAnonymousUser(user)) {
+    return "anonymous";
   }
 
   if (user.user_metadata && user.user_metadata.display_name) {
@@ -417,7 +423,7 @@ function getDisplayNameFromUser(user) {
 }
 
 function updateAuthNavbar() {
-  if (currentUser) {
+  if (currentUser && !isAnonymousUser()) {
     signInBtn.classList.add("hidden-panel");
     signUpBtn.classList.add("hidden-panel");
     logoutBtn.classList.remove("hidden-panel");
@@ -433,6 +439,29 @@ function updateAuthNavbar() {
   } else {
     adminNavBtn.classList.add("hidden-panel");
   }
+  const mobileAdmin = document.getElementById("mobileAdminNavBtn");
+  if (mobileAdmin) mobileAdmin.classList.toggle("hidden-panel", !isAdmin);
+  document.getElementById("mobileSignInBtn")?.classList.toggle("hidden-panel", Boolean(currentUser && !isAnonymousUser()));
+  document.getElementById("mobileSignUpBtn")?.classList.toggle("hidden-panel", Boolean(currentUser && !isAnonymousUser()));
+  document.getElementById("mobileLogoutBtn")?.classList.toggle("hidden-panel", !currentUser);
+}
+
+async function ensureAnonymousAccount() {
+  if (currentUser) return currentUser;
+  const { data, error } = await withTimeout(
+    supabaseClient.auth.signInAnonymously({ options: { data: { display_name: "anonymous" } } }),
+    15000,
+    "匿名儲存逾時，請檢查網路後重試。"
+  );
+  if (error) {
+    throw new Error("匿名上傳尚未開啟或目前不可用。請由管理者至 Supabase Auth → Providers 啟用 Anonymous Sign-Ins。詳細資訊：" + error.message);
+  }
+  currentUser = data?.user || null;
+  if (!currentUser) throw new Error("無法建立匿名工作階段，請重新整理後重試。");
+  await ensureProfile();
+  await checkAdminStatus();
+  updateAuthNavbar();
+  return currentUser;
 }
 
 async function refreshAuthState() {
@@ -638,6 +667,10 @@ async function submitAuthForm() {
   hideAuthSignupNotice();
 
   try {
+    if (isAnonymousUser()) {
+      const willSwitch = confirm("目前正在使用 anonymous 匿名工作階段。切換至其他帳號後，原匿名作品將不會自動移轉，可能無法繼續編輯。確定切換？");
+      if (!willSwitch) return;
+    }
     if (authMode === "signin") {
       const loginPromise = supabaseClient.auth.signInWithPassword({
         email,
@@ -909,10 +942,7 @@ function showPage(pageId) {
 }
 
 function handleStartCreate() {
-  if (!currentUser) {
-    alert("正式資料庫版需要先登入才能儲存作品。請先按右上角 Sign In 或 Sign Up。");
-  }
-
+  // 無須註冊即可畫圖；匿名儲存時才建立受 RLS 保護的匿名登入工作階段。
   showPage("create");
 }
 
@@ -944,9 +974,39 @@ navLinks.forEach(link => {
       return;
     }
 
+    if (page === "story") await loadPostcardStamps();
     showPage(page);
   });
 });
+
+// 首頁 LOGO 與手機側拉式導覽
+const mobileNav = document.getElementById("mobileNav");
+const mobileMenuToggle = document.getElementById("mobileMenuToggle");
+const mobileNavBackdrop = document.getElementById("mobileNavBackdrop");
+function closeMobileMenu() {
+  mobileNav?.classList.remove("is-open");
+  mobileNav?.setAttribute("aria-hidden", "true");
+  mobileMenuToggle?.setAttribute("aria-expanded", "false");
+  mobileNavBackdrop?.classList.add("hidden-panel");
+}
+function openMobileMenu() {
+  mobileNav?.classList.add("is-open");
+  mobileNav?.setAttribute("aria-hidden", "false");
+  mobileMenuToggle?.setAttribute("aria-expanded", "true");
+  mobileNavBackdrop?.classList.remove("hidden-panel");
+}
+mobileMenuToggle?.addEventListener("click", () => {
+  if (mobileNav?.classList.contains("is-open")) closeMobileMenu();
+  else openMobileMenu();
+});
+document.getElementById("mobileMenuClose")?.addEventListener("click", closeMobileMenu);
+mobileNavBackdrop?.addEventListener("click", closeMobileMenu);
+document.getElementById("homeLogo")?.addEventListener("click", () => { closeMobileMenu(); showPage("home"); });
+mobileNav?.querySelectorAll("button[data-page]").forEach(button => button.addEventListener("click", closeMobileMenu));
+document.getElementById("mobileSignInBtn")?.addEventListener("click", () => { closeMobileMenu(); openAuthModal("signin"); });
+document.getElementById("mobileSignUpBtn")?.addEventListener("click", () => { closeMobileMenu(); openAuthModal("signup"); });
+document.getElementById("mobileLogoutBtn")?.addEventListener("click", () => { closeMobileMenu(); handleLogout(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeMobileMenu(); });
 
 startBtn.addEventListener("click", handleStartCreate);
 
@@ -968,7 +1028,7 @@ function updateGalleryTabs() {
   if (currentGalleryMode === "public") {
     publicTab.classList.add("active-tab");
     publicFilterBar.classList.remove("hidden-panel");
-    gallerySubtitle.textContent = "Featured and popular artworks are ranked by interaction.";
+    gallerySubtitle.textContent = "Explore public pixel memories from creators and anonymous artists.";
   } else {
     myWorksTab.classList.add("active-tab");
     publicFilterBar.classList.add("hidden-panel");
@@ -1924,8 +1984,8 @@ Requirements:
 }
 
 async function generateAIPixelDraft() {
-  if (!currentUser) {
-    alert("請先登入後再使用 AI 生成底稿。");
+  if (!currentUser || isAnonymousUser()) {
+    alert("AI 生成需使用正式帳號登入，以防止匿名濫用 API 額度。匿名使用者仍可繪圖、轉換圖片並儲存作品。");
     return;
   }
 
@@ -2462,8 +2522,13 @@ async function callAIReview(artworkId) {
 
 async function saveCurrentArtwork() {
   if (!currentUser) {
-    alert("請先登入後再儲存作品。");
-    return;
+    if (!confirm("將以 anonymous 匿名身分儲存作品。匿名作品只能在此瀏覽器的工作階段內繼續管理；若登出或清除瀏覽資料，可能無法再取回編輯權限。確定繼續？")) return;
+    try {
+      await ensureAnonymousAccount();
+    } catch (error) {
+      alert(`匿名作品儲存準備失敗：${error.message}`);
+      return;
+    }
   }
 
   if (editingArtworkId) {
@@ -2522,7 +2587,7 @@ async function createNewArtwork() {
       throw error;
     }
 
-    if (wantsPublic) {
+    if (wantsPublic && !isAnonymousUser()) {
       await callAIReview(data.id);
     }
 
@@ -2537,7 +2602,9 @@ async function createNewArtwork() {
 
     showPage("gallery");
 
-    alert("作品已成功儲存到 Supabase。若有勾選公開，會先經過 AI 審核。");
+    alert(isAnonymousUser()
+      ? "匿名作品已儲存。若申請公開，將先由管理者人工審核；匿名工作階段遺失後無法恢復編輯權限。"
+      : "作品已成功儲存到 Supabase。若有勾選公開，會先經過 AI 審核。");
   } catch (error) {
     alert(`儲存失敗：${error.message}`);
   } finally {
@@ -2618,7 +2685,7 @@ async function updateExistingArtwork() {
       }
     }
 
-    if (wantsPublic) {
+    if (wantsPublic && !isAnonymousUser()) {
       await callAIReview(data.id);
     }
 
@@ -3323,7 +3390,7 @@ async function togglePublicById(id) {
     return;
   }
 
-  await callAIReview(id);
+  if (!isAnonymousUser()) await callAIReview(id);
   await renderGallery();
 
   if (isAdmin) {
@@ -3375,43 +3442,107 @@ async function deleteArtworkById(id) {
   if (isAdmin) await renderAdminPage();
 }
 
+/* =========================
+   Download preview / perler-bead grid / mobile backup
+========================= */
+let pendingDownloadPixelData = null;
+let pendingDownloadTitle = "pixalbum_artwork";
+let downloadReturnPage = "create";
+const downloadPreviewImage = document.getElementById("downloadPreviewImage");
+const downloadGridCheckbox = document.getElementById("downloadGridCheckbox");
+const downloadStatus = document.getElementById("downloadStatus");
+
+function buildDownloadPNG(pixelData, withGrid) {
+  const size = Number(pixelData?.size);
+  if (![16,32,64].includes(size) || !Array.isArray(pixelData?.colors) || pixelData.colors.length !== size*size) {
+    throw new Error("像素資料不完整，無法產生下載圖檔。");
+  }
+  const unit = 16;
+  const out = document.createElement("canvas");
+  out.width = out.height = size * unit;
+  const ctx = out.getContext("2d", { alpha:false });
+  if (!ctx) throw new Error("瀏覽器不支援繪製 PNG。");
+  pixelData.colors.forEach((color, i) => {
+    ctx.fillStyle = /^#[0-9a-fA-F]{6}$/.test(color || "") ? color : "#ffffff";
+    ctx.fillRect((i % size)*unit, Math.floor(i / size)*unit, unit, unit);
+  });
+  if (withGrid) {
+    ctx.strokeStyle = "#e0e3e5";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= size; i++) {
+      const point = (i*unit) + (i === size ? -0.5 : 0.5);
+      ctx.moveTo(point,0); ctx.lineTo(point,size*unit);
+      ctx.moveTo(0,point); ctx.lineTo(size*unit,point);
+    }
+    ctx.stroke();
+  }
+  return out.toDataURL("image/png");
+}
+function refreshDownloadPreview() {
+  if (!pendingDownloadPixelData) return;
+  try {
+    downloadPreviewImage.src = buildDownloadPNG(pendingDownloadPixelData, downloadGridCheckbox.checked);
+    downloadStatus.textContent = "可下載 PNG；手機也可以使用『開啟圖片』後長按儲存。";
+  } catch (error) {
+    downloadStatus.textContent = error.message;
+  }
+}
+function showDownloadPage(pixelData, title, backPage) {
+  pendingDownloadPixelData = pixelData;
+  pendingDownloadTitle = title || "pixalbum_artwork";
+  downloadReturnPage = backPage || "create";
+  document.getElementById("downloadArtworkName").textContent = pendingDownloadTitle;
+  downloadGridCheckbox.checked = true;
+  refreshDownloadPreview();
+  showPage("download");
+}
 async function downloadArtworkById(id) {
   const artwork = await fetchArtworkById(id);
-
-  if (!artwork) {
-    return;
-  }
-
-  const imageUrl = safeArtworkImageSource(artwork);
-
-  if (!imageUrl) {
-    alert("作品圖片網址無效，無法下載。");
-    return;
-  }
-
-  const link = document.createElement("a");
-  link.download = `${sanitizeFileName(artwork.title || "pixalbum_artwork")}.png`;
-  link.href = imageUrl;
-  link.click();
+  if (!artwork) return;
+  if (!artwork.pixel_data?.colors) { alert("無法讀取作品像素資料。"); return; }
+  showDownloadPage(artwork.pixel_data, artwork.title, "gallery");
 }
-
 function downloadCurrentArtwork() {
-  if (!hasUserDrawing()) {
-    alert("請至少手動填色或繪製一格後再下載。");
-    return;
-  }
-
-  const pixelData = getPixelData();
-  const imageUrl = pixelDataToImage(pixelData);
-
-  const link = document.createElement("a");
-  const title = artTitle.value.trim() || "pixalbum_artwork";
-
-  link.download = `${sanitizeFileName(title)}.png`;
-  link.href = imageUrl;
-  link.click();
+  if (!hasUserDrawing()) { alert("請先手動填色或繪製一格後再下載。"); return; }
+  showDownloadPage(getPixelData(), artTitle.value.trim() || "pixalbum_artwork", "create");
 }
-
+function triggerPNGDownload() {
+  if (!pendingDownloadPixelData) return;
+  const dataUrl = buildDownloadPNG(pendingDownloadPixelData, downloadGridCheckbox.checked);
+  const name = sanitizeFileName(pendingDownloadTitle) + (downloadGridCheckbox.checked ? "_grid" : "") + ".png";
+  // 此操作由真正的使用者點擊直接觸發，避免手機阻擋間接下載。
+  const blob = dataURLToBlob(dataUrl);
+  if (navigator.canShare && navigator.share) {
+    const file = new File([blob], name, {type:"image/png"});
+    if (navigator.canShare({ files:[file] })) {
+      navigator.share({ files:[file], title:pendingDownloadTitle }).then(() => {
+        downloadStatus.textContent = "已開啟手機分享／儲存選單。";
+      }).catch(error => {
+        if (error.name !== "AbortError") downloadStatus.textContent = "分享失敗，可按『開啟圖片』長按儲存。";
+      });
+      return;
+    }
+  }
+  const link = document.createElement("a");
+  link.download = name;
+  link.href = dataUrl;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  downloadStatus.textContent = "已送出 PNG 下載要求。若手機沒有儲存，請點『開啟圖片／手機長按儲存』。";
+}
+downloadGridCheckbox?.addEventListener("change",refreshDownloadPreview);
+document.getElementById("downloadConfirmBtn")?.addEventListener("click", triggerPNGDownload);
+document.getElementById("downloadOpenImageBtn")?.addEventListener("click", () => {
+  if (!pendingDownloadPixelData) return;
+  // user gesture directly opens new tab; phone can long-press image to save.
+  const url = buildDownloadPNG(pendingDownloadPixelData, downloadGridCheckbox.checked);
+  const opened = window.open(url,"_blank","noopener,noreferrer");
+  if (!opened) downloadStatus.textContent = "瀏覽器封鎖新分頁，請允許 Pixalbum 開啟彈出視窗。";
+});
+document.getElementById("downloadBackBtn")?.addEventListener("click", () => showPage(downloadReturnPage));
 downloadBtn.addEventListener("click", downloadCurrentArtwork);
 
 /* =========================
@@ -3867,6 +3998,195 @@ if (refreshAdminBtn) {
     alert("Admin Review 已重新整理。");
   });
 }
+
+/* =========================
+   Postcards: contact our team
+========================= */
+const postcardForm = document.getElementById("postcardForm");
+const postcardTitle = document.getElementById("postcardTitle");
+const postcardCategory = document.getElementById("postcardCategory");
+const postcardDetails = document.getElementById("postcardDetails");
+const postcardStampSelect = document.getElementById("postcardStampSelect");
+const postcardStampPreview = document.getElementById("postcardStampPreview");
+const postcardStatus = document.getElementById("postcardStatus");
+const postcardSendBtn = document.getElementById("postcardSendBtn");
+let availablePostcardStamps = new Map();
+const postcardCategoryLabels = {
+  bug: "系統錯誤／功能異常", account: "帳號／登入問題",
+  artwork: "作品／儲存／下載", ai: "AI 創作問題",
+  suggestion: "功能建議", other: "其他"
+};
+
+function updatePostcardStampPreview() {
+  const selected = availablePostcardStamps.get(postcardStampSelect?.value);
+  postcardStampPreview.src = selected ? safeArtworkImageSource(selected) : "annomous.png";
+}
+async function loadPostcardStamps() {
+  if (!postcardStampSelect) return;
+  const lastSelected = postcardStampSelect.value;
+  postcardStampSelect.replaceChildren(new Option("預設匿名郵票", ""));
+  availablePostcardStamps = new Map();
+  if (currentUser) {
+    const {data,error} = await supabaseClient.from("artworks")
+      .select("id,title,pixel_data,image_url")
+      .eq("user_id",currentUser.id)
+      .order("created_at",{ascending:false}).limit(60);
+    if (error) console.warn("Postcard stamp list:",error.message);
+    else (data || []).forEach(artwork => {
+      availablePostcardStamps.set(artwork.id,artwork);
+      postcardStampSelect.add(new Option(artwork.title || "Untitled", artwork.id));
+    });
+  }
+  if (availablePostcardStamps.has(lastSelected)) postcardStampSelect.value = lastSelected;
+  updatePostcardStampPreview();
+}
+postcardStampSelect?.addEventListener("change", updatePostcardStampPreview);
+
+postcardForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const title = validatePlainTextField(postcardTitle.value,"標題",80,{required:true});
+  if (!title.ok) { alert(title.message); return; }
+  const details = validatePlainTextField(postcardDetails.value,"詳細問題回報",2000,{required:true});
+  if (!details.ok) { alert(details.message); return; }
+  const category = postcardCategory.value;
+  if (!Object.hasOwn(postcardCategoryLabels,category)) { alert("請選擇問題種類。"); return; }
+  const stampArtworkId = postcardStampSelect.value || null;
+  postcardSendBtn.disabled = true;
+  postcardSendBtn.textContent = "Sending...";
+  postcardStatus.textContent = "正在寄送明信片…";
+  try {
+    // 無帳號者自動取得 Supabase Anonymous Auth 工作階段；資料庫 RPC 驗證身分及限流。
+    await ensureAnonymousAccount();
+    const {error} = await withTimeout(supabaseClient.rpc("submit_postcard",{
+      p_title:title.value, p_category:category, p_details:details.value,
+      p_stamp_artwork_id:stampArtworkId
+    }),20000,"明信片寄送逾時，請稍後檢查再重試，避免重複提交。");
+    if (error) throw error;
+    postcardForm.reset();
+    postcardStampSelect.value = "";
+    updatePostcardStampPreview();
+    postcardStatus.textContent = "明信片已成功寄給管理團隊，謝謝你的回饋！";
+    alert("明信片已寄出！我們已收到你的問題與建議。");
+  } catch (error) {
+    console.error("Postcard submit error", error);
+    postcardStatus.textContent = "寄送失敗：" + (error.message || "請稍後再試");
+    alert("明信片寄送失敗：" + (error.message || "請稍後再試"));
+  } finally {
+    postcardSendBtn.disabled = false;
+    postcardSendBtn.textContent = "Send ✦";
+  }
+});
+
+/* =========================
+   Admin Review / Report / Suggestion tabs
+========================= */
+let currentAdminSection = "review";
+const adminSectionNames = ["review","report","suggestion"];
+async function showAdminSection(name) {
+  if (!isAdmin || !adminSectionNames.includes(name)) return;
+  currentAdminSection = name;
+  adminSectionNames.forEach(key => {
+    const btn = document.querySelector(`[data-admin-tab="${key}"]`);
+    const view = document.getElementById(`admin${key[0].toUpperCase()+key.slice(1)}View`);
+    btn?.classList.toggle("active-admin-tab",key === name);
+    btn?.setAttribute("aria-selected",String(key === name));
+    view?.classList.toggle("hidden-panel",key !== name);
+  });
+  if (name === "report") await renderAdminReports();
+  if (name === "suggestion") await renderAdminSuggestions();
+}
+document.querySelectorAll("[data-admin-tab]").forEach(btn => {
+  btn.addEventListener("click", () => showAdminSection(btn.dataset.adminTab));
+});
+
+let adminReportArtworkMap = new Map();
+async function renderAdminReports() {
+  if (!isAdmin) return;
+  const list = document.getElementById("adminReportList");
+  list.textContent = "讀取檢舉案件中…";
+  const {data:reports,error} = await supabaseClient.from("reports")
+    .select("id,artwork_id,reason,status,created_at")
+    .order("created_at",{ascending:false}).limit(200);
+  if (error) {list.textContent = "讀取檢舉失敗："+error.message; return;}
+  if (!reports?.length) {list.innerHTML='<p class="admin-empty">目前沒有檢舉案件。</p>';return;}
+  const ids = [...new Set(reports.map(r=>r.artwork_id).filter(Boolean))];
+  const {data:artworks,error:artworkError} = await supabaseClient.from("artworks")
+    .select("id,title,image_url,image_path,pixel_data,review_status,is_public,story,created_at")
+    .in("id",ids);
+  if (artworkError) console.warn("Report artwork lookup:",artworkError.message);
+  adminReportArtworkMap = new Map((artworks || []).map(a=>[a.id,a]));
+  list.innerHTML = reports.map(report => {
+    const a=adminReportArtworkMap.get(report.artwork_id);
+    const src=a ? safeArtworkImageSource(a):"annomous.png";
+    const date=report.created_at?new Date(report.created_at).toLocaleString():"";
+    const status=report.status||"open";
+    return `<article class="admin-message-card"><img src="${escapeAttr(src)}" alt="檢舉作品圖片" />
+      <div><h4>${escapeHTML(a?.title || "作品已不存在")}</h4>
+      <p class="admin-message-meta">${escapeHTML(date)} · ${escapeHTML(status)} · ${escapeHTML(report.artwork_id)}</p>
+      <p><strong>檢舉原因：</strong>${escapeHTML(report.reason || "未填寫")}</p>
+      <div class="admin-message-actions">
+        ${a?`<button data-report-action="detail" data-artwork-id="${escapeAttr(a.id)}" type="button">查看作品</button>`:""}
+        ${status === "open"?`<button data-report-action="reviewed" data-report-id="${escapeAttr(report.id)}" type="button">標記已處理</button>`:""}
+      </div></div></article>`;
+  }).join("");
+}
+document.getElementById("adminReportList")?.addEventListener("click",async event => {
+  const btn=event.target.closest("button[data-report-action]");
+  if (!btn || !isAdmin) return;
+  if (btn.dataset.reportAction === "detail") {
+    const a=adminReportArtworkMap.get(btn.dataset.artworkId);
+    if (a) openArtworkModal(a);
+  } else if (btn.dataset.reportAction === "reviewed") {
+    btn.disabled = true;
+    const {error} = await supabaseClient.from("reports")
+      .update({status:"reviewed",updated_at:new Date().toISOString()})
+      .eq("id",btn.dataset.reportId).eq("status","open");
+    if (error) alert("更新案件失敗："+error.message);
+    await renderAdminReports();
+  }
+});
+document.getElementById("adminReportRefreshBtn")?.addEventListener("click", renderAdminReports);
+
+let adminSuggestionStampMap = new Map();
+async function renderAdminSuggestions() {
+  if (!isAdmin) return;
+  const list = document.getElementById("adminSuggestionList");
+  list.textContent = "讀取明信片中…";
+  const {data:letters,error} = await supabaseClient.from("postcards")
+    .select("id,sender_id,title,category,details,stamp_artwork_id,status,created_at")
+    .order("created_at",{ascending:false}).limit(200);
+  if (error) {list.textContent = "讀取明信片失敗："+error.message; return;}
+  if (!letters?.length) {list.innerHTML='<p class="admin-empty">目前尚未收到明信片。</p>';return;}
+  const ids=[...new Set(letters.map(l=>l.stamp_artwork_id).filter(Boolean))];
+  adminSuggestionStampMap = new Map();
+  if (ids.length) {
+    const {data,error:stampError}=await supabaseClient.from("artworks")
+      .select("id,image_url,pixel_data,title").in("id",ids);
+    if (stampError) console.warn("Postcard image lookup:",stampError.message);
+    else adminSuggestionStampMap=new Map((data||[]).map(a=>[a.id,a]));
+  }
+  list.innerHTML=letters.map(letter=>{
+    const stamp=adminSuggestionStampMap.get(letter.stamp_artwork_id);
+    const image=stamp?safeArtworkImageSource(stamp):"annomous.png";
+    const date=letter.created_at?new Date(letter.created_at).toLocaleString():"";
+    const status=letter.status||"new";
+    return `<article class="admin-message-card"><img src="${escapeAttr(image)}" alt="使用者明信片郵票" />
+      <div><h4>${escapeHTML(letter.title)}</h4>
+      <p class="admin-message-meta">${escapeHTML(date)} · ${escapeHTML(postcardCategoryLabels[letter.category]||letter.category)} · ${escapeHTML(status)}</p>
+      <p>${escapeHTML(letter.details)}</p>
+      <div class="admin-message-actions">${status==='new'?`<button data-postcard-action="read" data-postcard-id="${escapeAttr(letter.id)}" type="button">標記已讀</button>`:''}</div>
+      </div></article>`;
+  }).join("");
+}
+document.getElementById("adminSuggestionList")?.addEventListener("click",async event=>{
+  const btn=event.target.closest("button[data-postcard-action]");
+  if (!btn || !isAdmin) return;
+  btn.disabled = true;
+  const {error} = await supabaseClient.rpc("admin_mark_postcard_read",{p_postcard_id:btn.dataset.postcardId});
+  if (error) alert("標記已讀失敗："+error.message);
+  await renderAdminSuggestions();
+});
+document.getElementById("adminSuggestionRefreshBtn")?.addEventListener("click",renderAdminSuggestions);
 
 /* =========================
    Init

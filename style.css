@@ -2101,3 +2101,77 @@ footer {
 .auth-signup-actions button:hover {
   background: #e7f1f8;
 }
+
+/* ===== Pixalbum 2026-11-10: responsive navigation / downloads / postcards ===== */
+.logo { border:0; background:transparent; color:inherit; font-family:inherit; cursor:pointer; padding:0; }
+.logo:hover { opacity:0.82; }
+.mobile-menu-toggle {display:none; background:transparent; color:#1f3347; border:1px solid #d0c3ae; font-size:24px; line-height:1; border-radius:10px; padding:7px 12px; cursor:pointer;}
+.mobile-nav-backdrop {position:fixed; inset:0; z-index:199; background:rgba(17,30,45,.45);}
+.mobile-side-nav {position:fixed; z-index:200; top:0; right:0; height:100dvh; width:min(82vw,330px); background:#fffcf6; box-shadow:-15px 0 35px rgba(27,42,59,.21); transform:translateX(105%); visibility:hidden; transition:transform .24s ease,visibility .24s; display:flex; flex-direction:column; gap:8px; padding:24px; overflow-y:auto;}
+.mobile-side-nav.is-open {transform:translateX(0); visibility:visible;}
+.mobile-nav-heading {display:flex; align-items:center; justify-content:space-between; letter-spacing:3px; margin-bottom:18px; font-size:19px;}
+.mobile-nav-heading button {font-size:29px; border:0; background:none; color:#1f3347; cursor:pointer;}
+.mobile-nav-link {width:100%; padding:13px; border-radius:12px; text-align:left; font-size:17px; background:#f7efe1;}
+.mobile-auth-controls {margin-top:auto; padding-top:18px; border-top:1px solid #e4d8c4; display:flex; gap:8px; flex-wrap:wrap;}
+.mobile-auth-controls button {font:inherit; border-radius:30px; border:1px solid #1f4e79; background:white; color:#1f4e79; padding:9px 14px; cursor:pointer;}
+.mobile-auth-controls #mobileSignUpBtn {background:#1f4e79; color:white;}
+.download-section {background:#f8f1e5; text-align:center; padding:120px 20px 64px;}
+.download-section h2 {font-size:42px; margin-bottom:10px;}
+.download-layout {max-width:1010px; display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,350px); gap:30px; align-items:start; margin:35px auto;}
+.download-preview-card,.download-settings-card {background:#fffcf6; border:1px solid #e4d6c2; border-radius:24px; box-shadow:0 12px 30px rgba(30,50,70,.07); padding:26px;}
+.download-preview-card img {display:block; width:100%; max-width:580px; margin:auto; object-fit:contain; aspect-ratio:1; image-rendering:pixelated; background:white; border:7px solid #eee0c7;}
+.download-settings-card {text-align:left; display:flex; flex-direction:column; gap:17px;}
+.download-settings-card h3 {font-size:25px;}
+.download-settings-card .primary-btn,.download-settings-card .secondary-btn {width:100%;}
+.download-grid-toggle {display:flex; align-items:center; gap:9px; font-weight:600; cursor:pointer;}
+.download-grid-toggle input {width:19px; height:19px; accent-color:#1f4e79;}
+.download-grid-note,.download-status {font-size:14px; color:#667587;}
+.postcard-plain-btn {border:0; background:none; color:#1f4e79; text-decoration:underline; padding:6px; font:inherit; cursor:pointer;}
+.postcard-section {background:#f5eddf; padding:120px 5% 90px; text-align:center;}
+.postcard-section > h2 {font-size:46px;}
+.postcard-card {max-width:1060px; margin:30px auto; display:grid; grid-template-columns:36% 64%; text-align:left; background:#fffbf2; border:2px solid #e0cfaf; outline:5px solid rgba(255,255,255,.7); border-radius:6px; box-shadow:0 20px 48px rgba(34,52,62,.14); padding:35px; background-image:repeating-linear-gradient(90deg, transparent,transparent 19px,rgba(217,177,116,.025) 20px);}
+.postcard-stamp-side {padding:16px 29px 14px 6px; border-right:2px dashed #cab89b; display:flex; flex-direction:column; gap:13px; align-items:flex-start;}
+.postcard-stamp-label {font-size:27px; font-weight:bold; line-height:1.25; color:#21405a;}
+.postcard-stamp-label span {display:block; font-size:16px; font-weight:normal; letter-spacing:1px; margin-top:5px;}
+.postcard-stamp-frame {width:160px; height:160px; background:#eff5e7; border:8px dotted #a8bc9d; padding:5px; align-self:center; display:grid; place-items:center;}
+.postcard-stamp-frame img {width:100%; height:100%; object-fit:contain; image-rendering:pixelated;}
+.postcard-stamp-side label,.postcard-message-side label {font-weight:bold; font-size:15px;}
+.postcard-stamp-side select,.postcard-message-side input,.postcard-message-side select,.postcard-message-side textarea {background:rgba(255,255,255,.73); border:1px solid #cbbda8; padding:12px 14px; border-radius:8px; color:#253c50; font:inherit; width:100%;}
+.postcard-stamp-hint {font-size:13px; color:#697989; line-height:1.6;}
+.postcard-divider-art {color:#bf913b; font-size:21px; align-self:center; margin-top:auto;}
+.postcard-message-side {padding:12px 0 7px 34px; display:flex; flex-direction:column; gap:12px;}
+.postcard-dear {font-size:30px; font-weight:bold; border-bottom:1px solid #d9c7ac; padding-bottom:12px; margin-bottom:4px;}
+.postcard-dear span {float:right; font-size:13px; font-weight:normal; color:#ae8b5d; margin-top:16px;}
+.postcard-message-side label span {color:#b25042;}
+.postcard-message-side textarea {resize:vertical; min-height:165px;}
+.postcard-footer-row {display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:10px;}
+.postcard-footer-row span {font-style:italic; color:#aa8e68; font-size:14px;}
+.postcard-status {font-size:14px; color:#2e694a;}
+.admin-section-tabs {max-width:1140px; margin:0 auto 26px; display:flex; justify-content:center; gap:14px;}
+.admin-section-tab {font:inherit; padding:11px 32px; border:1px solid #adc0d3; border-radius:24px; background:#fffbf4; color:#1f4e79; cursor:pointer;}
+.admin-section-tab.active-admin-tab {background:#1f4e79; color:white; border-color:#1f4e79;}
+.admin-message-list {display:flex; flex-direction:column; gap:16px;}
+.admin-message-card {display:grid; grid-template-columns:100px minmax(0,1fr); gap:20px; background:#fff; border:1px solid #e1dacd; border-radius:15px; padding:18px;}
+.admin-message-card img {width:100px; height:100px; object-fit:contain; image-rendering:pixelated; background:#f8f6ee; border:4px solid #f1e4d1;}
+.admin-message-card h4 {font-size:20px; margin-bottom:7px; word-break:break-word;}
+.admin-message-card p {white-space:pre-wrap; word-break:break-word; font-size:14px; margin:5px 0;}
+.admin-message-meta {color:#677b88; font-size:13px;}
+.admin-message-actions {display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+.admin-message-actions button {padding:7px 15px; border:1px solid #1f4e79; color:#1f4e79; background:white; border-radius:20px; cursor:pointer; font:inherit; font-size:14px;}
+@media(max-width:768px){
+  .navbar {grid-template-columns:minmax(0,1fr) auto; gap:12px;}
+  .navbar .auth-navbar {display:none;}
+  .navbar .mobile-menu-toggle {display:block; justify-self:end;}
+  #download.active-section {padding:92px 6% 48px;}
+  .download-layout {grid-template-columns:1fr;}
+  .download-section h2 {font-size:34px;}
+  .postcard-card {grid-template-columns:1fr; padding:22px;}
+  .postcard-stamp-side {border:0; border-bottom:2px dashed #cab89b; padding:6px 0 20px;}
+  .postcard-stamp-frame {align-self:flex-start; width:130px; height:130px;}
+  .postcard-message-side {padding:24px 0 0;}
+  .postcard-dear {font-size:23px;}
+  .admin-section-tabs {gap:7px;}
+  .admin-section-tab {flex:1; padding:10px 8px; font-size:14px;}
+  .admin-message-card {grid-template-columns:1fr;}
+  .admin-message-card img {width:95px; height:95px;}
+}

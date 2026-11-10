@@ -7,23 +7,23 @@
   <title>Pixalbum｜像簿</title>
 
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="style.css?v=2026111004" />
+  <link rel="stylesheet" href="style.css?v=2026111010" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
 
   <header class="navbar">
-    <div class="logo">
+    <button id="homeLogo" class="logo" type="button" aria-label="Pixalbum 返回首頁">
       <span class="logo-icon">✦</span>
       <span>PIXALBUM</span>
-    </div>
+    </button>
 
     <nav>
       <button class="nav-link" data-page="home" type="button">Home</button>
       <button class="nav-link" data-page="create" type="button">Create</button>
       <button class="nav-link" data-page="gallery" type="button">Gallery</button>
-      <button class="nav-link" data-page="story" type="button">Story</button>
+      <button class="nav-link" data-page="story" type="button">Postcard</button>
       <button id="adminNavBtn" class="nav-link hidden-panel" data-page="admin" type="button">Admin</button>
     </nav>
 
@@ -32,7 +32,22 @@
       <button id="signUpBtn" class="signup-btn" type="button">Sign Up</button>
       <button id="logoutBtn" class="login-btn hidden-panel" type="button">Logout</button>
     </div>
+    <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="mobileNav">☰</button>
   </header>
+  <div id="mobileNavBackdrop" class="mobile-nav-backdrop hidden-panel"></div>
+  <aside id="mobileNav" class="mobile-side-nav" aria-label="手機導覽選單" aria-hidden="true">
+    <div class="mobile-nav-heading"><strong>PIXALBUM</strong><button id="mobileMenuClose" type="button" aria-label="關閉選單">×</button></div>
+    <button class="nav-link mobile-nav-link" data-page="home" type="button">Home</button>
+    <button class="nav-link mobile-nav-link" data-page="create" type="button">Create</button>
+    <button class="nav-link mobile-nav-link" data-page="gallery" type="button">Gallery</button>
+    <button class="nav-link mobile-nav-link" data-page="story" type="button">Postcard</button>
+    <button id="mobileAdminNavBtn" class="nav-link mobile-nav-link hidden-panel" data-page="admin" type="button">Admin</button>
+    <div id="mobileAuthControls" class="mobile-auth-controls">
+      <button id="mobileSignInBtn" type="button">Sign In</button>
+      <button id="mobileSignUpBtn" type="button">Sign Up</button>
+      <button id="mobileLogoutBtn" class="hidden-panel" type="button">Logout</button>
+    </div>
+  </aside>
 
   <main>
 
@@ -197,6 +212,26 @@
       </div>
     </section>
 
+    <section id="download" class="page-section download-section">
+      <h2>Download Pixel Art</h2>
+      <p class="section-subtitle">下載前先預覽作品，製作拼豆圖樣時可選擇顯示像素格線。</p>
+      <div class="download-layout">
+        <div class="download-preview-card">
+          <img id="downloadPreviewImage" alt="作品 PNG 下載預覽" />
+        </div>
+        <div class="download-settings-card">
+          <h3>Download Options</h3>
+          <p id="downloadArtworkName">Pixalbum Artwork</p>
+          <label class="download-grid-toggle"><input id="downloadGridCheckbox" type="checkbox" checked /> 顯示像素邊線（拼豆格線）</label>
+          <p class="download-grid-note">開啟時保留每一格的輪廓；關閉時輸出乾淨的像素圖案。此選項只影響下載圖片，不會改變原作品。</p>
+          <button id="downloadConfirmBtn" class="primary-btn" type="button">下載 PNG 圖片</button>
+          <button id="downloadOpenImageBtn" class="secondary-btn" type="button">開啟圖片／手機長按儲存</button>
+          <button id="downloadBackBtn" class="postcard-plain-btn" type="button">返回上一頁</button>
+          <p id="downloadStatus" class="download-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
     <section id="gallery" class="page-section gallery-section">
       <h2>Gallery</h2>
       <p id="gallerySubtitle" class="section-subtitle">
@@ -227,6 +262,12 @@
         管理者可審核 AI 標記作品，並可管理已公開作品。
       </p>
 
+      <div class="admin-section-tabs" role="tablist" aria-label="管理選項">
+        <button id="adminReviewTab" class="admin-section-tab active-admin-tab" type="button" data-admin-tab="review" role="tab" aria-selected="true">Review</button>
+        <button id="adminReportTab" class="admin-section-tab" type="button" data-admin-tab="report" role="tab" aria-selected="false">Report</button>
+        <button id="adminSuggestionTab" class="admin-section-tab" type="button" data-admin-tab="suggestion" role="tab" aria-selected="false">Suggestion</button>
+      </div>
+      <div id="adminReviewView">
       <div class="admin-summary">
         <div class="admin-summary-card">
           <span class="admin-summary-label">Review Queue</span>
@@ -295,15 +336,51 @@
           </div>
         </div>
       </div>
+      </div><!-- /adminReviewView -->
+      <div id="adminReportView" class="hidden-panel">
+        <div class="admin-panel"><div class="admin-panel-header"><div><h3>Reported Artworks</h3><p>使用者檢舉案件，由管理者查看原因並人工判斷，不會因檢舉直接下架。</p></div><button id="adminReportRefreshBtn" class="secondary-btn" type="button">Refresh</button></div>
+          <div id="adminReportList" class="admin-message-list"><p class="admin-empty">目前沒有檢舉案件。</p></div>
+        </div>
+      </div>
+      <div id="adminSuggestionView" class="hidden-panel">
+        <div class="admin-panel"><div class="admin-panel-header"><div><h3>Postcard Suggestions</h3><p>使用者寄給管理團隊的問題回報、建議與明信片。</p></div><button id="adminSuggestionRefreshBtn" class="secondary-btn" type="button">Refresh</button></div>
+          <div id="adminSuggestionList" class="admin-message-list"><p class="admin-empty">目前尚未收到明信片。</p></div>
+        </div>
+      </div>
     </section>
 
-    <section id="story" class="page-section story-section">
-      <h2>Every Pixel Holds a Memory</h2>
-
-      <p>
-        Pixalbum combines pixels and albums. Each artwork is not only an image,
-        but also a place to record thoughts, emotions, and personal stories.
-      </p>
+    <section id="story" class="page-section story-section postcard-section">
+      <h2>Postcard</h2>
+      <p class="section-subtitle">聯繫我們！把問題或想法寫成一封明信片寄給 Pixalbum 團隊。</p>
+      <form id="postcardForm" class="postcard-card" autocomplete="off">
+        <div class="postcard-stamp-side">
+          <div class="postcard-stamp-label">聯繫我們! <span>To Our Team</span></div>
+          <div class="postcard-stamp-frame"><img id="postcardStampPreview" src="annomous.png" alt="明信片預設郵票" /></div>
+          <label for="postcardStampSelect">選擇郵票（可選自己的畫作）</label>
+          <select id="postcardStampSelect"><option value="">預設匿名郵票</option></select>
+          <p class="postcard-stamp-hint">沒有選擇作品也能寄送；登入後可選擇自己的畫作作為郵票。</p>
+          <div class="postcard-divider-art" aria-hidden="true">✦ · · · ✦</div>
+        </div>
+        <div class="postcard-message-side">
+          <div class="postcard-dear">To Our Team <span>✦ Pixalbum</span></div>
+          <label for="postcardTitle">標題 <span>*</span></label>
+          <input id="postcardTitle" name="title" type="text" maxlength="80" placeholder="請輸入問題或建議標題" required />
+          <label for="postcardCategory">問題種類 <span>*</span></label>
+          <select id="postcardCategory" name="category" required>
+            <option value="">請選擇問題種類</option>
+            <option value="bug">系統錯誤／功能異常</option>
+            <option value="account">帳號／登入問題</option>
+            <option value="artwork">作品／儲存／下載</option>
+            <option value="ai">AI 創作問題</option>
+            <option value="suggestion">功能建議</option>
+            <option value="other">其他</option>
+          </select>
+          <label for="postcardDetails">詳細問題回報 <span>*</span></label>
+          <textarea id="postcardDetails" name="details" maxlength="2000" rows="6" placeholder="請描述遇到的問題、操作步驟，或想對我們說的話…" required></textarea>
+          <div class="postcard-footer-row"><span>With care, Pixalbum</span><button id="postcardSendBtn" type="submit" class="primary-btn">Send ✦</button></div>
+          <p id="postcardStatus" role="status" aria-live="polite" class="postcard-status"></p>
+        </div>
+      </form>
     </section>
 
   </main>
@@ -411,6 +488,6 @@
     <p>Pixalbum 像簿 © 2026</p>
   </footer>
 
-  <script src="script.js?v=2026111005"></script>
+  <script src="script.js?v=2026111010"></script>
 </body>
 </html>
