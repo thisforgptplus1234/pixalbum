@@ -2254,16 +2254,45 @@ function dataURLToBlob(dataURL) {
   return new Blob([new Uint8Array(array)], { type: mime });
 }
 
-async function uploadArtworkImage(pixelData, existingPath = null) {
+// 作品圖片僅允許存放在當前作者的單層資料夾：<user-id>/<filename>.png。
+// 這是前端的提前防呆；真正的授權仍由 Supabase Storage RLS 控制。
+function isArtworkPathOwnedBy(path, userId) {
+  if (typeof path !== "string" || typeof userId !== "string") return false;
+  const prefix = `${userId}/`;
+  if (!path.startsWith(prefix)) return false;
+  const filename = path.slice(prefix.length);
+  return /^[a-zA-Z0-9_-]+\.png$/.test(filename);
+}
+
+async function uploadArtworkImage(pixelData) {
+  if (!currentUser?.id) {
+    throw new Error("請先登入後再上傳作品圖片。");
+  }
+
   const imageDataUrl = pixelDataToImage(pixelData);
+  if (!imageDataUrl) {
+    throw new Error("作品像素資料無效，無法產生 PNG 圖片。");
+  }
   const blob = dataURLToBlob(imageDataUrl);
-  const path = existingPath || `${currentUser.id}/${crypto.randomUUID()}.png`;
+  // PNG 通常遠小於此限制；同時也需在 Supabase Bucket 設定 5 MB 上限。
+  if (blob.size > 5 * 1024 * 1024) {
+    throw new Error("作品圖片超過 5 MB，請調整後再儲存。");
+  }
+
+  // 每次儲存都採用新的檔名，避免 CDN / 瀏覽器繼續顯示舊圖片。
+  // 同時也能在資料庫更新失敗時保留原有 Storage 圖片。
+  const path = `${currentUser.id}/${crypto.randomUUID()}.png`;
+
+  if (!isArtworkPathOwnedBy(path, currentUser.id)) {
+    throw new Error("作品圖片儲存路徑不屬於目前帳號，已阻止寫入。");
+  }
 
   const { error } = await supabaseClient.storage
     .from("artworks")
     .upload(path, blob, {
       contentType: "image/png",
-      upsert: true
+      // 永遠不覆寫既有圖片，建立新路徑完成原子式切換。
+      upsert: false
     });
 
   if (error) {
@@ -2409,9 +2438,17 @@ async function updateExistingArtwork() {
   saveBtn.disabled = true;
   saveBtn.textContent = "Updating...";
 
+  // 使用新的 Storage 檔案名稱，讓 Gallery 不會因圖片網址快取而顯示舊畫面。
+  // 成功更新資料庫後才移除舊檔；如果資料庫更新失敗，保留舊圖片。
+  const artworkIdBeingEdited = editingArtworkId;
+  const previousImagePath = editingArtworkImagePath;
+  let newImagePath = null;
+  let databaseUpdated = false;
+
   try {
     const pixelData = getPixelData();
-    const uploaded = await uploadArtworkImage(pixelData, editingArtworkImagePath);
+    const uploaded = await uploadArtworkImage(pixelData);
+    newImagePath = uploaded.imagePath;
     const wantsPublic = publishCheckbox.checked;
 
     const { data, error } = await supabaseClient
@@ -2433,13 +2470,28 @@ async function updateExistingArtwork() {
         draft_type: currentDraftType,
         draft_prompt: currentDraftPrompt
       })
-      .eq("id", editingArtworkId)
+      .eq("id", artworkIdBeingEdited)
       .eq("user_id", currentUser.id)
       .select()
       .single();
 
     if (error) {
       throw error;
+    }
+    databaseUpdated = true;
+
+    // DB 已指向新路徑後才能刪除舊檔。失敗不影響已成功的編輯操作。
+    if (previousImagePath && previousImagePath !== uploaded.imagePath) {
+      if (isArtworkPathOwnedBy(previousImagePath, currentUser.id)) {
+        const { error: cleanupError } = await supabaseClient.storage
+          .from("artworks")
+          .remove([previousImagePath]);
+        if (cleanupError) {
+          console.warn("Old artwork image cleanup failed:", cleanupError.message);
+        }
+      } else {
+        console.warn("Skipped cleanup of an untrusted prior artwork image path.");
+      }
     }
 
     if (wantsPublic) {
@@ -2457,8 +2509,30 @@ async function updateExistingArtwork() {
 
     showPage("gallery");
 
-    alert("作品已更新。若有勾選公開，會重新送 AI 審核。");
+    alert("作品已更新，Gallery 將顯示新的圖片。若有勾選公開，會重新送 AI 審核。");
   } catch (error) {
+    if (!databaseUpdated && newImagePath) {
+      // 只有在確認資料庫沒有使用新路徑時，才清除剛上傳的暫存圖片。
+      // 若查詢失敗，寧願留下待清理檔案，也不能誤刪作品正式圖片。
+      try {
+        const { data: persisted, error: readError } = await supabaseClient
+          .from("artworks")
+          .select("image_path")
+          .eq("id", artworkIdBeingEdited)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+        if (!readError && persisted?.image_path !== newImagePath) {
+          const { error: cleanupError } = await supabaseClient.storage
+            .from("artworks")
+            .remove([newImagePath]);
+          if (cleanupError) {
+            console.warn("New artwork image cleanup failed:", cleanupError.message);
+          }
+        }
+      } catch (cleanupError) {
+        console.warn("Image cleanup verification failed:", cleanupError.message);
+      }
+    }
     alert(`更新失敗：${error.message}`);
   } finally {
     saveBtn.disabled = false;
@@ -3140,35 +3214,41 @@ async function deleteArtworkById(id) {
   }
 
   const confirmDelete = confirm("確定要刪除這件作品嗎？刪除後無法復原。");
+  if (!confirmDelete) return;
 
-  if (!confirmDelete) {
+  const artwork = await fetchArtworkById(id);
+  if (!artwork) return;
+  if (artwork.user_id !== currentUser.id) {
+    alert("你只能刪除自己的作品。");
     return;
   }
 
-  const artwork = await fetchArtworkById(id);
-
-  if (artwork && artwork.image_path) {
-    await supabaseClient.storage
-      .from("artworks")
-      .remove([artwork.image_path]);
-  }
-
-  const { error } = await supabaseClient
+  // 先確認資料庫確實刪除，避免 Storage 先被清掉、資料庫卻刪除失敗。
+  const { data: deleted, error } = await supabaseClient
     .from("artworks")
     .delete()
     .eq("id", id)
-    .eq("user_id", currentUser.id);
+    .eq("user_id", currentUser.id)
+    .select("id");
 
-  if (error) {
-    alert(`刪除失敗：${error.message}`);
+  if (error || !deleted?.length) {
+    alert(`刪除失敗：${error?.message || "無法刪除這件作品，請檢查權限。"}`);
     return;
   }
 
-  await renderGallery();
-
-  if (isAdmin) {
-    await renderAdminPage();
+  // 只有明確屬於自己的圖片路徑才要求刪除，真正權限仍由 Storage RLS 控制。
+  if (artwork.image_path && isArtworkPathOwnedBy(artwork.image_path, currentUser.id)) {
+    const { error: storageError } = await supabaseClient.storage
+      .from("artworks")
+      .remove([artwork.image_path]);
+    if (storageError) {
+      console.warn("Artwork image cleanup failed:", storageError.message);
+      alert("作品資料已刪除，但圖片清理失敗；請聯絡管理員檢查 Storage 殘留檔案。");
+    }
   }
+
+  await renderGallery();
+  if (isAdmin) await renderAdminPage();
 }
 
 async function downloadArtworkById(id) {
@@ -3554,31 +3634,35 @@ async function adminDeleteArtwork(id) {
   }
 
   const confirmDelete = confirm("管理者刪除：確定要永久刪除這件作品嗎？這會刪除資料庫作品與 Storage 圖片。");
+  if (!confirmDelete) return;
 
-  if (!confirmDelete) {
+  const artwork = await fetchArtworkById(id);
+  if (!artwork) return;
+
+  // 僅以資料庫已確認刪除的作品進行圖片清理，避免資料庫刪除失敗造成破圖。
+  const { data: deleted, error } = await supabaseClient
+    .from("artworks")
+    .delete()
+    .eq("id", id)
+    .select("id");
+
+  if (error || !deleted?.length) {
+    alert(`Delete 失敗：${error?.message || "作品不存在或資料庫拒絕刪除。"}`);
     return;
   }
 
-  const artwork = await fetchArtworkById(id);
-
-  if (artwork && artwork.image_path) {
+  // 防止惡意作品把 image_path 指向其他人的檔案後，誘使管理者刪除該檔案。
+  if (artwork.image_path && isArtworkPathOwnedBy(artwork.image_path, artwork.user_id)) {
     const { error: storageError } = await supabaseClient.storage
       .from("artworks")
       .remove([artwork.image_path]);
-
     if (storageError) {
-      console.warn("Admin storage delete error:", storageError.message);
+      console.warn("Admin storage cleanup failed:", storageError.message);
+      alert("作品資料已刪除，但 Storage 圖片清理失敗，請人工檢查殘留檔案。");
     }
-  }
-
-  const { error } = await supabaseClient
-    .from("artworks")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    alert(`Delete 失敗：${error.message}`);
-    return;
+  } else if (artwork.image_path) {
+    console.warn("Skipped unsafe artwork image path:", artwork.id);
+    alert("作品已刪除，但圖片路徑異常，已略過 Storage 刪除以保護其他人的檔案。");
   }
 
   await refreshAdminAndGallery();
