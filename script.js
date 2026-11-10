@@ -974,6 +974,7 @@ navLinks.forEach(link => {
       return;
     }
 
+    if (page === "thanks") await renderSpecialThanks();
     if (page === "story") await loadPostcardStamps();
     showPage(page);
   });
@@ -4081,7 +4082,7 @@ postcardForm?.addEventListener("submit", async event => {
    Admin Review / Report / Suggestion tabs
 ========================= */
 let currentAdminSection = "review";
-const adminSectionNames = ["review","report","suggestion"];
+const adminSectionNames = ["review","report","suggestion","thanks"];
 async function showAdminSection(name) {
   if (!isAdmin || !adminSectionNames.includes(name)) return;
   currentAdminSection = name;
@@ -4094,6 +4095,7 @@ async function showAdminSection(name) {
   });
   if (name === "report") await renderAdminReports();
   if (name === "suggestion") await renderAdminSuggestions();
+  if (name === "thanks") await renderAdminSpecialThanks();
 }
 document.querySelectorAll("[data-admin-tab]").forEach(btn => {
   btn.addEventListener("click", () => showAdminSection(btn.dataset.adminTab));
@@ -4187,6 +4189,131 @@ document.getElementById("adminSuggestionList")?.addEventListener("click",async e
   await renderAdminSuggestions();
 });
 document.getElementById("adminSuggestionRefreshBtn")?.addEventListener("click",renderAdminSuggestions);
+
+
+/* =========================
+   Special Thanks (public list + admin management)
+   Read access: public RLS. Writes: verified admin RPC only.
+========================= */
+const specialThanksList = document.getElementById("specialThanksList");
+const adminThanksList = document.getElementById("adminThanksList");
+const adminThanksForm = document.getElementById("adminThanksForm");
+const adminThanksName = document.getElementById("adminThanksName");
+const adminThanksNote = document.getElementById("adminThanksNote");
+const adminThanksAddBtn = document.getElementById("adminThanksAddBtn");
+const adminThanksStatus = document.getElementById("adminThanksStatus");
+
+async function fetchSpecialThanks() {
+  const { data, error } = await supabaseClient
+    .from("special_thanks")
+    .select("id,name,note,created_at")
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error) throw error;
+  return data || [];
+}
+
+async function renderSpecialThanks() {
+  if (!specialThanksList) return;
+  specialThanksList.innerHTML = '<p class="thanks-empty">正在讀取致謝名單…</p>';
+  try {
+    const entries = await fetchSpecialThanks();
+    if (!entries.length) {
+      specialThanksList.innerHTML = '<p class="thanks-empty">特別致謝名單即將登場 ♡</p>';
+      return;
+    }
+    specialThanksList.innerHTML = entries.map(entry => `
+      <article class="thanks-person">
+        <span class="thanks-person-sparkle" aria-hidden="true">✿</span>
+        <div class="thanks-person-copy">
+          <h3>${escapeHTML(entry.name)}</h3>
+          ${entry.note ? `<p>${escapeHTML(entry.note)}</p>` : ""}
+        </div>
+        <span class="thanks-person-heart" aria-hidden="true">♡</span>
+      </article>
+    `).join("");
+  } catch (error) {
+    console.warn("Special Thanks read failed:", error.message);
+    specialThanksList.textContent = "致謝名單暫時無法讀取，請稍後重試。";
+  }
+}
+
+async function renderAdminSpecialThanks() {
+  if (!isAdmin || !adminThanksList) return;
+  adminThanksList.innerHTML = '<p class="admin-empty">正在讀取名單…</p>';
+  try {
+    const entries = await fetchSpecialThanks();
+    if (!entries.length) {
+      adminThanksList.innerHTML = '<p class="admin-empty">目前名單是空的，可以新增第一筆致謝。</p>';
+      return;
+    }
+    adminThanksList.innerHTML = entries.map(entry => `
+      <article class="thanks-admin-item">
+        <div>
+          <strong>${escapeHTML(entry.name)}</strong>
+          ${entry.note ? `<p>${escapeHTML(entry.note)}</p>` : ""}
+        </div>
+        <button class="thanks-admin-delete" type="button" data-thanks-delete="${escapeAttr(entry.id)}" data-thanks-name="${escapeAttr(entry.name)}" aria-label="刪除 ${escapeAttr(entry.name)}">刪除</button>
+      </article>
+    `).join("");
+  } catch (error) {
+    console.error("Admin thanks list failed:", error);
+    adminThanksList.textContent = "讀取名單失敗，請先確認已執行 Special Thanks SQL。";
+  }
+}
+
+adminThanksForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin) return;
+  const name = validatePlainTextField(adminThanksName.value, "致謝名稱", 60, { required: true });
+  if (!name.ok) { alert(name.message); return; }
+  const note = validatePlainTextField(adminThanksNote.value, "致謝文字", 160);
+  if (!note.ok) { alert(note.message); return; }
+  adminThanksAddBtn.disabled = true;
+  adminThanksAddBtn.textContent = "新增中…";
+  adminThanksStatus.textContent = "正在新增致謝名單…";
+  try {
+    const { error } = await supabaseClient.rpc("admin_add_special_thanks", {
+      p_name: name.value,
+      p_note: note.value || null
+    });
+    if (error) throw error;
+    adminThanksForm.reset();
+    adminThanksStatus.textContent = "新增成功！公開名單已更新。";
+    await renderAdminSpecialThanks();
+    await renderSpecialThanks();
+  } catch (error) {
+    console.error("Thanks create failed:", error);
+    adminThanksStatus.textContent = "新增失敗：" + (error.message || "請稍後重試");
+  } finally {
+    adminThanksAddBtn.disabled = false;
+    adminThanksAddBtn.textContent = "✦ 新增致謝";
+  }
+});
+
+adminThanksList?.addEventListener("click", async event => {
+  const button = event.target.closest("button[data-thanks-delete]");
+  if (!button || !isAdmin) return;
+  const name = button.dataset.thanksName || "這筆致謝";
+  if (!confirm(`確定要從致謝名單刪除「${name}」嗎？`)) return;
+  button.disabled = true;
+  adminThanksStatus.textContent = "正在刪除…";
+  try {
+    const { error } = await supabaseClient.rpc("admin_delete_special_thanks", {
+      p_id: button.dataset.thanksDelete
+    });
+    if (error) throw error;
+    adminThanksStatus.textContent = "已刪除致謝名單。";
+    await renderAdminSpecialThanks();
+    await renderSpecialThanks();
+  } catch (error) {
+    console.error("Thanks delete failed:", error);
+    adminThanksStatus.textContent = "刪除失敗：" + (error.message || "請稍後重試");
+    button.disabled = false;
+  }
+});
+
+document.getElementById("adminThanksRefreshBtn")?.addEventListener("click", renderAdminSpecialThanks);
 
 /* =========================
    Init
