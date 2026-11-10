@@ -752,7 +752,19 @@ async function submitAuthForm() {
     alert("註冊完成，已登入 Pixalbum。 ");
   } catch (error) {
     console.error("Auth error:", error);
-    alert(`${authMode === "signin" ? "登入" : "註冊"}失敗：${error.message || "Unknown error"}`);
+
+    // Supabase Auth 的 Invalid login credentials 統一顯示中文提示，
+    // 不區分「帳號不存在」和「密碼錯誤」，避免暴露帳號存在資訊。
+    const isInvalidLogin = authMode === "signin" && (
+      error?.code === "invalid_credentials" ||
+      /invalid login credentials/i.test(String(error?.message || ""))
+    );
+
+    if (isInvalidLogin) {
+      alert("登入失敗：帳號或密碼錯誤，請確認後再試。");
+    } else {
+      alert(`${authMode === "signin" ? "登入" : "註冊"}失敗：${error?.message || "未知錯誤"}`);
+    }
   } finally {
     authSubmitBtn.disabled = false;
     updateAuthMode();
