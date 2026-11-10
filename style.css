@@ -2061,3 +2061,43 @@ footer {
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
+
+/* Signup result: always provide a visible recovery path, even when Auth
+   does not reveal whether the email already exists. */
+.auth-signup-notice {
+  margin-top: 10px;
+  padding: 13px 14px;
+  border: 1px solid #c8d9e7;
+  border-radius: 12px;
+  background: #f2f7fb;
+  color: #234564;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.auth-signup-notice.confirmed-duplicate {
+  border-color: #e0ba79;
+  background: #fff7e9;
+  color: #694719;
+}
+.auth-signup-notice p {
+  margin: 0 0 9px;
+}
+.auth-signup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.auth-signup-actions button {
+  flex: 1 1 125px;
+  padding: 8px 10px;
+  border: 1px solid #7695ad;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f4e79;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.auth-signup-actions button:hover {
+  background: #e7f1f8;
+}

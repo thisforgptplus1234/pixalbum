@@ -65,6 +65,10 @@ const authModal = document.getElementById("authModal");
 const authCloseBtn = document.getElementById("authCloseBtn");
 const signInTab = document.getElementById("signInTab");
 const signUpTab = document.getElementById("signUpTab");
+const authSignupNotice = document.getElementById("authSignupNotice");
+const authSignupNoticeText = document.getElementById("authSignupNoticeText");
+const authSignupGoSignIn = document.getElementById("authSignupGoSignIn");
+const authSignupForgot = document.getElementById("authSignupForgot");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const authDisplayName = document.getElementById("authDisplayName");
@@ -503,6 +507,7 @@ async function checkAdminStatus() {
 }
 
 function openAuthModal(mode = "signup") {
+  hideAuthSignupNotice();
   authMode = mode;
   updateAuthMode();
 
@@ -515,6 +520,7 @@ function openAuthModal(mode = "signup") {
 }
 
 function closeAuthModal() {
+  hideAuthSignupNotice();
   authModal.classList.add("hidden-panel");
   document.body.style.overflow = "";
 }
@@ -540,6 +546,65 @@ function updateAuthMode() {
     }
     authHint.textContent = "New here? Create an account to start saving artworks.";
   }
+}
+
+function hideAuthSignupNotice() {
+  if (authSignupNotice) {
+    authSignupNotice.classList.add("hidden-panel");
+    authSignupNotice.classList.remove("confirmed-duplicate");
+  }
+}
+
+function showAuthSignupNotice(message, isConfirmedDuplicate = false) {
+  if (!authSignupNotice || !authSignupNoticeText) {
+    // 舊版 HTML 仍被快取時的後備提示。
+    alert(message);
+    return;
+  }
+
+  authSignupNoticeText.textContent = message;
+  authSignupNotice.classList.remove("hidden-panel");
+  authSignupNotice.classList.toggle("confirmed-duplicate", isConfirmedDuplicate);
+}
+
+// 只使用 Supabase Auth 原生註冊回應判斷重複帳號。
+// 不查詢 profiles、auth.users，也不重新公開帳號存在性 RPC。
+function isDuplicateSignupResponse(data, error) {
+  const errorCode = String(error?.code || "").toLowerCase();
+  const errorMessage = String(error?.message || "").toLowerCase();
+
+  if (
+    errorCode === "email_exists" ||
+    errorCode === "user_already_exists" ||
+    errorMessage.includes("user already registered") ||
+    errorMessage.includes("already been registered") ||
+    errorMessage.includes("email already exists")
+  ) {
+    return true;
+  }
+
+  // 在部分 Supabase Email Confirmation 設定下，重複註冊
+  // 會回傳一個 identities 為空陣列的混淆使用者物件。
+  // 其他不明確回應一律不猜測帳號是否存在。
+  return Boolean(
+    data?.user &&
+    Array.isArray(data.user.identities) &&
+    data.user.identities.length === 0
+  );
+}
+
+function showDuplicateSignupNotice(email) {
+  // 保留使用者輸入的 Email，清空密碼，切換到登入模式。
+  authMode = "signin";
+  authEmail.value = email;
+  authPassword.value = "";
+  updateAuthMode();
+  authHint.textContent =
+    "此 Email 已註冊。請登入，若忘記密碼可點選 Forgot password?";
+  showAuthSignupNotice(
+    "此 Email 已註冊 Pixalbum。請使用 Sign In 登入；如果忘記密碼，請重設密碼。",
+    true
+  );
 }
 
 async function submitAuthForm() {
@@ -568,6 +633,9 @@ async function submitAuthForm() {
 
   authSubmitBtn.disabled = true;
   authSubmitBtn.textContent = authMode === "signin" ? "Signing in..." : "Signing up...";
+  let signupDuplicateDetected = false;
+  let signupAwaitingEmail = false;
+  hideAuthSignupNotice();
 
   try {
     if (authMode === "signin") {
@@ -635,19 +703,35 @@ async function submitAuthForm() {
       "註冊逾時。請檢查網路、Supabase 專案狀態，或重新整理頁面再試。"
     );
 
+    if (isDuplicateSignupResponse(data, error)) {
+      signupDuplicateDetected = true;
+      showDuplicateSignupNotice(email);
+      return;
+    }
+
     if (error) {
       throw error;
     }
-
-    closeAuthModal();
 
     if (!data.session) {
       currentUser = null;
       isAdmin = false;
       updateAuthNavbar();
-      alert("如果此信箱可以註冊，系統會寄送驗證信。請檢查信箱；若你已註冊，請改用 Sign In 或忘記密碼功能。");
+      // 開啟 Email 驗證時，Supabase 對某些已存在帳號回傳模糊結果。
+      // 此情況無法由前端安全地證實帳號存在性，因此不能宣稱「已註冊」。
+      // 留在視窗內提供明確可執行的登入及密碼重設選項。
+      authPassword.value = "";
+      signupAwaitingEmail = true;
+      showAuthSignupNotice(
+        "已提交註冊申請。若這是新帳號，請至信箱收取驗證信；" +
+        "若沒有收到信，可能是此 Email 已註冊，請改用登入或忘記密碼功能。"
+      );
+      authHint.textContent =
+        "請檢查垃圾郵件匣；已有帳號可按「前往登入」。";
       return;
     }
+
+    closeAuthModal();
 
     currentUser = data.user || null;
 
@@ -672,6 +756,13 @@ async function submitAuthForm() {
   } finally {
     authSubmitBtn.disabled = false;
     updateAuthMode();
+    if (signupDuplicateDetected) {
+      authHint.textContent =
+        "此 Email 已註冊。請登入，若忘記密碼可點選 Forgot password?";
+    } else if (signupAwaitingEmail) {
+      authHint.textContent =
+        "請檢查垃圾郵件匣；已有帳號可按「前往登入」。";
+    }
   }
 }
 
@@ -718,16 +809,37 @@ authModal.addEventListener("click", event => {
 });
 
 signInTab.addEventListener("click", () => {
+  hideAuthSignupNotice();
   authMode = "signin";
   updateAuthMode();
 });
 
 signUpTab.addEventListener("click", () => {
+  hideAuthSignupNotice();
   authMode = "signup";
   updateAuthMode();
 });
 
 authSubmitBtn.addEventListener("click", submitAuthForm);
+
+if (authSignupGoSignIn) {
+  authSignupGoSignIn.addEventListener("click", () => {
+    hideAuthSignupNotice();
+    authMode = "signin";
+    authPassword.value = "";
+    updateAuthMode();
+  });
+}
+
+if (authSignupForgot) {
+  authSignupForgot.addEventListener("click", () => {
+    hideAuthSignupNotice();
+    authMode = "signin";
+    authPassword.value = "";
+    updateAuthMode();
+    sendPasswordResetEmail();
+  });
+}
 
 if (forgotPasswordBtn) {
   forgotPasswordBtn.addEventListener("click", sendPasswordResetEmail);

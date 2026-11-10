@@ -7,7 +7,7 @@
   <title>Pixalbum｜像簿</title>
 
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="style.css?v=2026111001" />
+  <link rel="stylesheet" href="style.css?v=2026111004" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -342,6 +342,14 @@
           Forgot password?
         </button>
 
+        <div id="authSignupNotice" class="auth-signup-notice hidden-panel" role="status" aria-live="polite">
+          <p id="authSignupNoticeText"></p>
+          <div class="auth-signup-actions">
+            <button id="authSignupGoSignIn" type="button">前往登入 Sign In</button>
+            <button id="authSignupForgot" type="button">忘記密碼？</button>
+          </div>
+        </div>
+
         <p id="authHint" class="auth-hint">
           New here? Create an account to start saving artworks.
         </p>
@@ -403,6 +411,6 @@
     <p>Pixalbum 像簿 © 2026</p>
   </footer>
 
-  <script src="script.js?v=2026111002"></script>
+  <script src="script.js?v=2026111004"></script>
 </body>
 </html>
