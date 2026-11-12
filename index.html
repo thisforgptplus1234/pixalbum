@@ -7,7 +7,7 @@
   <title>Pixalbum｜像簿</title>
 
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="style.css?v=2026111011" />
+  <link rel="stylesheet" href="style.css?v=2026111202" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -83,21 +83,26 @@
 
     <section id="thanks" class="page-section thanks-section" aria-labelledby="thanksTitle">
       <div class="thanks-heading">
-        <div class="thanks-pixel-ornament" aria-hidden="true">✦  ♡  ✦</div>
+        <div class="thanks-pixel-ornament" aria-hidden="true">✦　✦</div>
         <p class="thanks-eyebrow">A LITTLE NOTE OF GRATITUDE</p>
-        <h2 id="thanksTitle">Special Thanks</h2>
-        <p class="thanks-chinese-title">特別致謝名單</p>
-        <p class="thanks-intro">每一份幫助，都是讓像簿變得更好的小小像素。<br>謝謝一路上給予支持、建議與溫暖的你們。</p>
+        <h2 id="thanksTitle">
+          <button id="thanksToggle" class="thanks-toggle" type="button"
+                  aria-controls="thanksDetails" aria-expanded="false">Special Thanks</button>
+        </h2>
+        <div id="thanksHeaderDetails" class="thanks-header-details" hidden>
+          <p class="thanks-chinese-title">特別致謝名單</p>
+          <p class="thanks-intro">每一份幫助，都是讓像簿變得更好的小小像素。<br>謝謝一路上給予支持、建議與溫暖的你們。</p>
+        </div>
       </div>
-      <div class="thanks-paper" aria-live="polite">
-        <div class="thanks-paper-header">
-          <span>✧ WITH GRATITUDE</span>
-          <span>PIXALBUM · 2026</span>
+      <div id="thanksDetails" class="thanks-details" hidden>
+        <div class="thanks-paper" aria-live="polite">
+          <div class="thanks-paper-header">
+            <span>✧ WITH GRATITUDE</span>
+            <span>PIXALBUM · 2026</span>
+          </div>
+          <div id="specialThanksList" class="thanks-list"></div>
+          <p class="thanks-paper-signature">With love, Pixalbum</p>
         </div>
-        <div id="specialThanksList" class="thanks-list">
-          <p class="thanks-empty">正在讀取致謝名單…</p>
-        </div>
-        <p class="thanks-paper-signature">With love, Pixalbum ♡</p>
       </div>
     </section>
 
@@ -371,22 +376,20 @@
       <div id="adminThanksView" class="hidden-panel">
         <div class="admin-panel thanks-admin-panel">
           <div class="admin-panel-header">
-            <div><h3>Special Thanks 名單管理</h3><p>在這裡新增或刪除致謝對象，公開的 Special Thanks 頁會同步更新。</p></div>
+            <div><h3>Special Thanks 名單管理</h3></div>
             <button id="adminThanksRefreshBtn" class="secondary-btn" type="button">Refresh</button>
           </div>
           <form id="adminThanksForm" class="thanks-admin-form" autocomplete="off">
-            <label for="adminThanksName">致謝名稱（必填）
-              <input id="adminThanksName" type="text" maxlength="60" placeholder="例如：協助測試的朋友" required />
+            <label for="adminThanksName">致謝名稱
+              <input id="adminThanksName" type="text" maxlength="60" required />
             </label>
-            <label for="adminThanksNote">致謝文字（選填）
-              <textarea id="adminThanksNote" maxlength="160" rows="2" placeholder="例如：謝謝你提供寶貴的使用回饋！"></textarea>
+            <label for="adminThanksNote">致謝文字
+              <textarea id="adminThanksNote" maxlength="160" rows="2"></textarea>
             </label>
             <button id="adminThanksAddBtn" type="submit" class="primary-btn">✦ 新增致謝</button>
-            <p id="adminThanksStatus" role="status" aria-live="polite"></p>
+            <p id="adminThanksStatus" class="thanks-admin-status" role="status" aria-live="polite"></p>
           </form>
-          <div id="adminThanksList" class="thanks-admin-list" aria-live="polite">
-            <p class="admin-empty">正在讀取致謝名單…</p>
-          </div>
+          <div id="adminThanksList" class="thanks-admin-list" aria-live="polite"></div>
         </div>
       </div>
     </section>
@@ -530,6 +533,6 @@
     <p>Pixalbum 像簿 © 2026</p>
   </footer>
 
-  <script src="script.js?v=2026111201"></script>
+  <script src="script.js?v=2026111202"></script>
 </body>
 </html>

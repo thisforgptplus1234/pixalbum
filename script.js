@@ -4195,6 +4195,23 @@ document.getElementById("adminSuggestionRefreshBtn")?.addEventListener("click",r
    Special Thanks (public list + admin management)
    Read access: public RLS. Writes: verified admin RPC only.
 ========================= */
+const thanksSection = document.getElementById("thanks");
+const thanksToggle = document.getElementById("thanksToggle");
+const thanksDetails = document.getElementById("thanksDetails");
+const thanksHeaderDetails = document.getElementById("thanksHeaderDetails");
+
+// 致謝區塊預設收合，只有點擊 Special Thanks 才展開。
+thanksToggle?.addEventListener("click", () => {
+  const expanding = thanksToggle.getAttribute("aria-expanded") !== "true";
+  thanksToggle.setAttribute("aria-expanded", String(expanding));
+  thanksSection?.classList.toggle("is-expanded", expanding);
+  if (thanksDetails) thanksDetails.hidden = !expanding;
+  if (thanksHeaderDetails) thanksHeaderDetails.hidden = !expanding;
+  if (expanding) {
+    requestAnimationFrame(() => thanksSection?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+});
+
 const specialThanksList = document.getElementById("specialThanksList");
 const adminThanksList = document.getElementById("adminThanksList");
 const adminThanksForm = document.getElementById("adminThanksForm");
@@ -4215,36 +4232,42 @@ async function fetchSpecialThanks() {
 
 async function renderSpecialThanks() {
   if (!specialThanksList) return;
-  specialThanksList.innerHTML = '<p class="thanks-empty">正在讀取致謝名單…</p>';
+  specialThanksList.replaceChildren();
   try {
     const entries = await fetchSpecialThanks();
-    if (!entries.length) {
-      specialThanksList.innerHTML = '<p class="thanks-empty">特別致謝名單即將登場 ♡</p>';
-      return;
-    }
-    specialThanksList.innerHTML = entries.map(entry => `
-      <article class="thanks-person">
-        <span class="thanks-person-sparkle" aria-hidden="true">✿</span>
-        <div class="thanks-person-copy">
-          <h3>${escapeHTML(entry.name)}</h3>
-          ${entry.note ? `<p>${escapeHTML(entry.note)}</p>` : ""}
+    if (!entries.length) return; // 名單尚未建立時不顯示提示文字。
+
+    // 隨機進場順序、浮動節奏與上下幅度；每張卡片保留獨立欄位，絕不互相遮擋。
+    specialThanksList.innerHTML = entries.map(entry => {
+      const appearDelay = Math.floor(Math.random() * 780);
+      const floatDuration = (4.1 + Math.random() * 2.8).toFixed(2);
+      const floatDelay = (-Math.random() * 5).toFixed(2);
+      const floatDistance = (3 + Math.random() * 4).toFixed(1);
+      return `
+        <div class="thanks-person-slot" style="--thanks-appear-delay:${appearDelay}ms;--thanks-float-duration:${floatDuration}s;--thanks-float-delay:${floatDelay}s;--thanks-float-distance:${floatDistance}px">
+          <article class="thanks-person">
+            <span class="thanks-person-sparkle" aria-hidden="true">✿</span>
+            <div class="thanks-person-copy">
+              <h3>${escapeHTML(entry.name)}</h3>
+              ${entry.note ? `<p>${escapeHTML(entry.note)}</p>` : ""}
+            </div>
+          </article>
         </div>
-        <span class="thanks-person-heart" aria-hidden="true">♡</span>
-      </article>
-    `).join("");
+      `;
+    }).join("");
   } catch (error) {
     console.warn("Special Thanks read failed:", error.message);
-    specialThanksList.textContent = "致謝名單暫時無法讀取，請稍後重試。";
+    // 公開頁無多餘提示；失敗原因僅記錄於 console。
   }
 }
 
 async function renderAdminSpecialThanks() {
   if (!isAdmin || !adminThanksList) return;
-  adminThanksList.innerHTML = '<p class="admin-empty">正在讀取名單…</p>';
+  adminThanksList.replaceChildren();
   try {
     const entries = await fetchSpecialThanks();
     if (!entries.length) {
-      adminThanksList.innerHTML = '<p class="admin-empty">目前名單是空的，可以新增第一筆致謝。</p>';
+      adminThanksList.replaceChildren();
       return;
     }
     adminThanksList.innerHTML = entries.map(entry => `
@@ -4271,7 +4294,7 @@ adminThanksForm?.addEventListener("submit", async event => {
   if (!note.ok) { alert(note.message); return; }
   adminThanksAddBtn.disabled = true;
   adminThanksAddBtn.textContent = "新增中…";
-  adminThanksStatus.textContent = "正在新增致謝名單…";
+  adminThanksStatus.textContent = "";
   try {
     const { error } = await supabaseClient.rpc("admin_add_special_thanks", {
       p_name: name.value,
@@ -4279,7 +4302,7 @@ adminThanksForm?.addEventListener("submit", async event => {
     });
     if (error) throw error;
     adminThanksForm.reset();
-    adminThanksStatus.textContent = "新增成功！公開名單已更新。";
+    adminThanksStatus.textContent = "";
     await renderAdminSpecialThanks();
     await renderSpecialThanks();
   } catch (error) {
@@ -4297,13 +4320,13 @@ adminThanksList?.addEventListener("click", async event => {
   const name = button.dataset.thanksName || "這筆致謝";
   if (!confirm(`確定要從致謝名單刪除「${name}」嗎？`)) return;
   button.disabled = true;
-  adminThanksStatus.textContent = "正在刪除…";
+  adminThanksStatus.textContent = "";
   try {
     const { error } = await supabaseClient.rpc("admin_delete_special_thanks", {
       p_id: button.dataset.thanksDelete
     });
     if (error) throw error;
-    adminThanksStatus.textContent = "已刪除致謝名單。";
+    adminThanksStatus.textContent = "";
     await renderAdminSpecialThanks();
     await renderSpecialThanks();
   } catch (error) {

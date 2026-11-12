@@ -2177,82 +2177,187 @@ footer {
 }
 
 
-/* ===== Special Thanks: a cozy public gratitude album ===== */
-.thanks-section {
-  min-height:100vh;
-  padding:118px 6% 88px;
-  background:radial-gradient(circle at 87% 10%,rgba(247,210,133,.26),transparent 38%),
-             radial-gradient(circle at 12% 92%,rgba(162,184,139,.23),transparent 39%),#f7efe1;
-}
-.thanks-heading {max-width:760px;text-align:center;margin:0 auto 37px;}
-.thanks-pixel-ornament {font-size:24px;letter-spacing:10px;color:#c99a40;margin-bottom:11px;}
-.thanks-eyebrow {color:#a87c40;letter-spacing:4px;font-size:12px;font-weight:bold;}
-.thanks-heading h2 {font-size:clamp(36px,5vw,58px);margin:7px 0 0;color:#203d58;}
-.thanks-chinese-title {font-size:22px;letter-spacing:5px;margin:5px 0 15px;color:#6f7d60;}
-.thanks-intro {line-height:1.9;font-size:16px;color:#647084;}
-.thanks-paper {position:relative;max-width:930px;margin:auto;padding:32px clamp(20px,5vw,64px) 30px;
-  background:#fffcf4;border:2px solid #e4d4b7;border-radius:6px;
-  box-shadow:0 18px 48px rgba(60,70,60,.09),inset 0 0 0 7px rgba(241,227,202,.29);}
-.thanks-paper::before,.thanks-paper::after {content:"✦";position:absolute;color:#d9a54a;font-size:23px;}
-.thanks-paper::before {top:22px;right:24px;}
-.thanks-paper::after {bottom:21px;left:24px;}
-.thanks-paper-header {display:flex;gap:12px;justify-content:space-between;color:#b19a79;font-size:11px;letter-spacing:2px;
-  border-bottom:1px dashed #dfd1b9;padding-bottom:17px;margin-bottom:21px;}
-.thanks-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
-.thanks-person {display:flex;align-items:flex-start;gap:14px;min-width:0;border:1px solid #e9dfc9;border-radius:16px;
-  padding:18px 16px;background:#fffdf8;box-shadow:0 4px 14px rgba(42,57,62,.04);}
-.thanks-person-sparkle {flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;
-  font-size:19px;border-radius:11px;background:#f5e8c8;color:#c78e39;}
-.thanks-person-copy {min-width:0;flex:1;}
-.thanks-person h3 {font-size:20px;line-height:1.4;color:#21435d;overflow-wrap:anywhere;}
-.thanks-person p {font-size:14px;line-height:1.7;color:#7a776e;margin:7px 0 0;overflow-wrap:anywhere;white-space:pre-wrap;}
-.thanks-person-heart {color:#d6a85a;font-size:22px;line-height:1;}
-.thanks-empty {grid-column:1 / -1;text-align:center;padding:42px 12px;font-size:17px;color:#7b8474;}
-.thanks-paper-signature {color:#b08b62;font-style:italic;text-align:right;margin-top:28px;font-size:14px;}
-.thanks-admin-form {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) auto;align-items:end;
-  gap:14px;padding:20px;background:#fffaf0;border:1px solid #e6d8bf;border-radius:15px;margin-bottom:25px;}
-.thanks-admin-form label {display:flex;flex-direction:column;gap:8px;font-weight:bold;color:#263f55;font-size:14px;}
-.thanks-admin-form label span {color:#b45e56;}
-.thanks-admin-form input,.thanks-admin-form textarea {width:100%;border:1px solid #c9c1b0;border-radius:10px;
-  padding:10px 12px;background:#fff;color:#203d58;font:inherit;font-weight:normal;resize:vertical;}
-.thanks-admin-form button {white-space:nowrap;min-height:43px;}
-.thanks-admin-form #adminThanksStatus {grid-column:1/-1;font-size:13px;color:#56704b;min-height:1.5em;}
-.thanks-admin-list {display:flex;flex-direction:column;gap:11px;}
-.thanks-admin-item {display:flex;justify-content:space-between;align-items:center;gap:18px;background:#fff;
-  border:1px solid #e6dfd1;border-radius:13px;padding:15px 20px;}
-.thanks-admin-item strong {font-size:18px;color:#1f405e;overflow-wrap:anywhere;}
-.thanks-admin-item p {margin:3px 0 0;color:#687886;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;}
-.thanks-admin-delete {border:1px solid #bd8a8a;border-radius:99px;color:#9e4343;
-  background:#fff7f4;font:inherit;padding:7px 16px;cursor:pointer;white-space:nowrap;}
-.thanks-admin-delete:hover {background:#9e4343;color:white;}
-.thanks-admin-delete:disabled {opacity:.6;cursor:wait;}
-@media (max-width:1100px) and (min-width:769px) {
-  .navbar {padding:0 24px;}
-  .navbar nav {gap:17px;}
-  .nav-link {font-size:14px;}
-}
-@media (max-width:768px) {
-  #thanks.active-section {padding:96px 5% 57px;}
-  .thanks-list {grid-template-columns:1fr;}
-  .thanks-paper {padding:23px 19px 26px;}
-  .thanks-paper-header {letter-spacing:.5px;}
-  .thanks-person {padding:14px;}
-  .thanks-admin-form {grid-template-columns:1fr;}
-  .thanks-admin-form #adminThanksStatus {grid-column:1;}
-  .admin-section-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
-  .thanks-admin-item {align-items:flex-start;}
-}
-
-/* Special Thanks is now an integral part of Home, between the feature cards and footer. */
+/* ===== Special Thanks: Home 折疊區塊＋不重疊的橫排浮動卡片 ===== */
 #thanks.thanks-section {
   min-height: 0;
-  padding: 64px 6% 76px;
+  padding: 10px 5% 12px;
   background: #fffaf0;
+  scroll-margin-top: 78px;
 }
-#thanks .thanks-heading { margin-bottom: 30px; }
-#thanks .thanks-heading h2 { font-size: clamp(32px, 4vw, 48px); }
-#thanks .thanks-paper { max-width: 1040px; }
-@media (max-width: 768px) {
-  #thanks.thanks-section.active-section { padding: 44px 5% 58px; }
-  #thanks .thanks-heading { margin-bottom: 22px; }
+#thanks .thanks-heading {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto;
+}
+#thanks .thanks-heading h2 { margin: 0; line-height: 1.5; }
+#thanks .thanks-toggle {
+  appearance: none;
+  display: inline-block;
+  padding: 4px 18px;
+  background: transparent;
+  color: #203d58;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  font-weight: normal;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: color .2s ease;
+}
+#thanks .thanks-toggle:hover { color: #b87d31; }
+#thanks .thanks-toggle:focus-visible { outline: 2px solid #1f4e79; outline-offset: 3px; border-radius: 4px; }
+#thanks:not(.is-expanded) .thanks-pixel-ornament,
+#thanks:not(.is-expanded) .thanks-eyebrow { display: none; }
+#thanks [hidden] { display: none !important; }
+
+#thanks.is-expanded.thanks-section {
+  padding: 64px 5% 76px;
+  background:
+    radial-gradient(circle at 87% 10%,rgba(247,210,133,.26),transparent 38%),
+    radial-gradient(circle at 12% 92%,rgba(162,184,139,.23),transparent 39%),
+    #f7efe1;
+}
+#thanks.is-expanded .thanks-heading { margin-bottom: 30px; }
+#thanks .thanks-pixel-ornament { font-size: 22px; letter-spacing: 10px; color: #c99a40; margin-bottom: 11px; }
+#thanks .thanks-eyebrow { color: #a87c40; letter-spacing: 4px; font-size: 12px; font-weight: bold; }
+#thanks.is-expanded .thanks-toggle { font-size: clamp(32px,4vw,48px); font-weight: bold; padding: 4px 0; }
+#thanks .thanks-chinese-title { font-size: 22px; letter-spacing: 5px; margin: 5px 0 15px; color: #6f7d60; }
+#thanks .thanks-intro { line-height: 1.9; font-size: 16px; color: #647084; }
+#thanks .thanks-details { animation: thanksDetailsReveal .38s ease both; }
+@keyframes thanksDetailsReveal { from { opacity:0; } to { opacity:1; } }
+
+#thanks .thanks-paper {
+  position: relative;
+  max-width: 1040px;
+  margin: auto;
+  padding: 32px clamp(18px, 5vw, 56px) 28px;
+  background: #fffcf4;
+  border: 2px solid #e4d4b7;
+  border-radius: 6px;
+  box-shadow: 0 18px 48px rgba(60,70,60,.09), inset 0 0 0 7px rgba(241,227,202,.29);
+}
+#thanks .thanks-paper::before, #thanks .thanks-paper::after {
+  content: "✦"; position: absolute; color: #d9a54a; font-size: 22px; pointer-events: none;
+}
+#thanks .thanks-paper::before { top: 22px; right: 24px; }
+#thanks .thanks-paper::after { bottom: 21px; left: 24px; }
+#thanks .thanks-paper-header {
+  display: flex; justify-content: space-between; gap: 12px;
+  color: #b19a79; font-size: 11px; letter-spacing: 2px;
+  border-bottom: 1px dashed #dfd1b9; padding-bottom: 17px; margin-bottom: 18px;
+}
+/* 單一橫排，卡片的格位永不重疊；名單變多時可左右捲動。 */
+#thanks .thanks-list {
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: flex-start;
+  gap: 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 18px 4px 24px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: #decbb0 transparent;
+  min-height: 90px;
+}
+#thanks .thanks-list:empty { min-height: 0; padding: 0; }
+#thanks .thanks-person-slot {
+  flex: 0 0 clamp(215px,27vw,285px);
+  min-width: 0;
+  align-self: stretch;
+  scroll-snap-align: start;
+  animation: thanksPersonAppear .56s ease-out both;
+  animation-delay: var(--thanks-appear-delay,0ms);
+}
+#thanks .thanks-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 95px;
+  padding: 14px 15px;
+  background: #fffdf8;
+  border: 1px solid #e9dfc9;
+  border-radius: 16px;
+  box-shadow: 0 6px 14px rgba(42,57,62,.065);
+  animation: thanksPersonFloat var(--thanks-float-duration,5.5s) ease-in-out infinite alternate;
+  animation-delay: var(--thanks-float-delay,0s);
+}
+#thanks .thanks-person-sparkle {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; font-size: 19px;
+  border-radius: 11px; background: #f5e8c8; color: #c78e39;
+}
+#thanks .thanks-person-copy { flex: 1; min-width: 0; }
+#thanks .thanks-person h3 { font-size: 18px; color: #21435d; line-height: 1.4; overflow-wrap: anywhere; }
+#thanks .thanks-person p { font-size: 13px; line-height: 1.6; color: #7a776e; margin-top: 5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+#thanks .thanks-paper-signature { color: #b08b62; font-style: italic; text-align: right; margin-top: 22px; font-size: 14px; }
+@keyframes thanksPersonAppear {
+  from { opacity:0; transform: translateY(14px) scale(.96); }
+  to { opacity:1; transform: translateY(0) scale(1); }
+}
+@keyframes thanksPersonFloat {
+  from { transform: translateY(calc(-1 * var(--thanks-float-distance,5px))); }
+  to { transform: translateY(var(--thanks-float-distance,5px)); }
+}
+
+/* Admin：只保留欄位名稱及操作控制，不顯示範例／空名單提示。 */
+.thanks-admin-form {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1.7fr) auto;
+  gap: 14px;
+  align-items: end;
+  padding: 20px;
+  background: #fffaf0;
+  border: 1px solid #e6d8bf;
+  border-radius: 15px;
+  margin-bottom: 25px;
+}
+.thanks-admin-form label { display:flex; flex-direction:column; gap:8px; font-weight:bold; color:#263f55; font-size:14px; }
+.thanks-admin-form input, .thanks-admin-form textarea {
+  width: 100%; border: 1px solid #c9c1b0; border-radius: 10px;
+  padding: 10px 12px; background: #fff; color: #203d58;
+  font: inherit; font-weight: normal; resize: vertical;
+}
+.thanks-admin-form button { white-space:nowrap; min-height:43px; }
+.thanks-admin-status:empty { display: none; }
+.thanks-admin-status { grid-column:1/-1; color:#9b2c2c; font-size:13px; }
+.thanks-admin-list { display: flex; flex-direction: column; gap: 11px; }
+.thanks-admin-list:empty { display: none; }
+.thanks-admin-item {
+  display: flex; justify-content:space-between; align-items:center; gap:18px;
+  background: #fff; border:1px solid #e6dfd1; border-radius:13px; padding:15px 20px;
+}
+.thanks-admin-item strong { font-size:18px; color:#1f405e; overflow-wrap:anywhere; }
+.thanks-admin-item p { margin:3px 0 0; color:#687886; font-size:14px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.thanks-admin-delete {
+  border: 1px solid #bd8a8a; border-radius:99px;
+  color: #9e4343; background:#fff7f4;
+  font:inherit; padding:7px 16px; cursor:pointer; white-space:nowrap;
+}
+.thanks-admin-delete:hover { background:#9e4343; color:white; }
+.thanks-admin-delete:disabled { opacity:.6; cursor:wait; }
+@media (max-width:1100px) and (min-width:769px) {
+  .navbar { padding:0 24px; }
+  .navbar nav { gap:17px; }
+  .nav-link { font-size:14px; }
+}
+@media (max-width:768px) {
+  #thanks.thanks-section { padding: 8px 5% 11px; }
+  #thanks.is-expanded.thanks-section { padding: 44px 5% 52px; }
+  #thanks.is-expanded .thanks-heading { margin-bottom:22px; }
+  #thanks .thanks-paper { padding:23px 19px 26px; }
+  #thanks .thanks-paper-header { letter-spacing:.5px; }
+  #thanks .thanks-person-slot { flex-basis: 235px; }
+  .thanks-admin-form { grid-template-columns:1fr; }
+  .thanks-admin-status { grid-column:1; }
+  .admin-section-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .thanks-admin-item { align-items:flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #thanks .thanks-details, #thanks .thanks-person-slot, #thanks .thanks-person {
+    animation: none !important;
+    transition: none !important;
+  }
+  #thanks .thanks-list { scroll-behavior: auto; }
 }
