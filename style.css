@@ -2262,8 +2262,11 @@ footer {
 }
 #thanks .thanks-list:empty { min-height: 0; padding: 0; }
 #thanks .thanks-person-slot {
-  flex: 0 0 clamp(215px,27vw,285px);
-  min-width: 0;
+  /* 依文字內容自動調整卡片寬度，長內容不擠到下一張卡片。 */
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 190px;
+  max-width: min(620px, calc(100vw - 72px));
   align-self: stretch;
   scroll-snap-align: start;
   animation: thanksPersonAppear .56s ease-out both;
@@ -2274,8 +2277,8 @@ footer {
   align-items: center;
   gap: 12px;
   height: 100%;
-  min-height: 95px;
-  padding: 14px 15px;
+  min-height: 78px;
+  padding: 13px 15px;
   background: #fffdf8;
   border: 1px solid #e9dfc9;
   border-radius: 16px;
@@ -2288,9 +2291,37 @@ footer {
   width: 40px; height: 40px; font-size: 19px;
   border-radius: 11px; background: #f5e8c8; color: #c78e39;
 }
-#thanks .thanks-person-copy { flex: 1; min-width: 0; }
-#thanks .thanks-person h3 { font-size: 18px; color: #21435d; line-height: 1.4; overflow-wrap: anywhere; }
-#thanks .thanks-person p { font-size: 13px; line-height: 1.6; color: #7a776e; margin-top: 5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+/* 同一張卡片內：名稱、致謝文字必須保持同一橫列，不可上下換行。 */
+#thanks .thanks-person-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-x: auto; /* 文字太長時只讓卡片內可捲動，不覆蓋下一張卡片 */
+  scrollbar-width: thin;
+}
+#thanks .thanks-person h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 18px;
+  color: #21435d;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+#thanks .thanks-person p {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #7a776e;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 #thanks .thanks-paper-signature { color: #b08b62; font-style: italic; text-align: right; margin-top: 22px; font-size: 14px; }
 @keyframes thanksPersonAppear {
   from { opacity:0; transform: translateY(14px) scale(.96); }
@@ -2348,7 +2379,7 @@ footer {
   #thanks.is-expanded .thanks-heading { margin-bottom:22px; }
   #thanks .thanks-paper { padding:23px 19px 26px; }
   #thanks .thanks-paper-header { letter-spacing:.5px; }
-  #thanks .thanks-person-slot { flex-basis: 235px; }
+  #thanks .thanks-person-slot { flex-basis: auto; max-width: calc(100vw - 64px); }
   .thanks-admin-form { grid-template-columns:1fr; }
   .thanks-admin-status { grid-column:1; }
   .admin-section-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
