@@ -927,6 +927,7 @@ function showPage(pageId) {
   if (pageId === "home") {
     document.getElementById("home").classList.add("active-section");
     document.getElementById("concept").classList.add("active-section");
+    document.getElementById("thanks").classList.add("active-section");
   } else {
     const targetSection = document.getElementById(pageId);
 
@@ -974,7 +975,6 @@ navLinks.forEach(link => {
       return;
     }
 
-    if (page === "thanks") await renderSpecialThanks();
     if (page === "story") await loadPostcardStamps();
     showPage(page);
   });
@@ -4337,6 +4337,7 @@ async function initApp() {
   }
 
   showPage("home");
+  await renderSpecialThanks();
 }
 
 supabaseClient.auth.onAuthStateChange((event, session) => {

@@ -2242,3 +2242,17 @@ footer {
   .admin-section-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
   .thanks-admin-item {align-items:flex-start;}
 }
+
+/* Special Thanks is now an integral part of Home, between the feature cards and footer. */
+#thanks.thanks-section {
+  min-height: 0;
+  padding: 64px 6% 76px;
+  background: #fffaf0;
+}
+#thanks .thanks-heading { margin-bottom: 30px; }
+#thanks .thanks-heading h2 { font-size: clamp(32px, 4vw, 48px); }
+#thanks .thanks-paper { max-width: 1040px; }
+@media (max-width: 768px) {
+  #thanks.thanks-section.active-section { padding: 44px 5% 58px; }
+  #thanks .thanks-heading { margin-bottom: 22px; }
+}
