@@ -7,7 +7,7 @@
   <title>Pixalbum｜像簿</title>
 
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="style.css?v=2026111203" />
+  <link rel="stylesheet" href="style.css?v=2026112001" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
@@ -185,8 +185,17 @@
 
           <div id="palettePager" class="palette-pager hidden-panel">
             <button id="palettePrevBtn" type="button">上一頁</button>
-            <span id="palettePageInfo">Page 1 / 1</span>
+            <span id="palettePageInfo">第 1 / 1 頁</span>
             <button id="paletteNextBtn" type="button">下一頁</button>
+          </div>
+
+          <div class="palette-hint-setting">
+            <label for="paletteColorHintToggle" class="palette-hint-toggle">
+              <input id="paletteColorHintToggle" type="checkbox" role="switch" aria-describedby="paletteHintHelp" />
+              <span class="palette-hint-track" aria-hidden="true"></span>
+              <span class="palette-hint-label">開啟顏色提示</span>
+            </label>
+            <p id="paletteHintHelp" class="palette-hint-help">預設關閉，顯示完整底稿。</p>
           </div>
         </aside>
 
@@ -533,6 +542,6 @@
     <p>Pixalbum 像簿 © 2026</p>
   </footer>
 
-  <script src="script.js?v=2026111203"></script>
+  <script src="script.js?v=2026112001"></script>
 </body>
 </html>

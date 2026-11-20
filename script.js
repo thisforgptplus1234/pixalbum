@@ -45,6 +45,8 @@ const palettePager = document.getElementById("palettePager");
 const palettePrevBtn = document.getElementById("palettePrevBtn");
 const paletteNextBtn = document.getElementById("paletteNextBtn");
 const palettePageInfo = document.getElementById("palettePageInfo");
+const paletteColorHintToggle = document.getElementById("paletteColorHintToggle");
+const paletteHintHelp = document.getElementById("paletteHintHelp");
 
 const draftDepthWrapper = document.getElementById("draftDepthWrapper");
 const draftDepthSlider = document.getElementById("draftDepthSlider");
@@ -103,6 +105,9 @@ let editingArtworkImagePath = null;
 
 let extractedPaletteColors = [];
 let currentPalettePage = 1;
+// 只有使用者主動開啟提示時，才突顯選取色票在底稿中的區域。
+let isPaletteColorHintEnabled = false;
+let focusedReferencePaletteColor = "";
 
 let currentArtworkIsAIGenerated = false;
 let currentDraftType = "none";
@@ -1649,51 +1654,35 @@ function makeReferenceColor(hexColor) {
 
 function renderCellDisplay(cell) {
   const referenceColor = cell.dataset.referenceColor;
-  const referenceColorNormalized = normalizeHexColor(referenceColor);
-  const selectedFocusColor = focusedReferencePaletteColor;
-  const hasReferenceFocus = Boolean(selectedFocusColor);
-  const isFocusedReferenceCell = hasReferenceFocus && referenceColorNormalized === selectedFocusColor;
+  const isHintActive = isPaletteColorHintEnabled && Boolean(focusedReferencePaletteColor);
+  const isMatchingReference =
+    normalizeHexColor(referenceColor) === focusedReferencePaletteColor;
 
+  // 提示只影響畫面顯示，不改變底稿、筆刷像素或下載／儲存資料。
   cell.classList.remove("reference-focus-match", "reference-focus-dim");
 
   if (cell.dataset.hasUserPaint === "true") {
+    // 使用者已畫好的像素一律維持原樣。
     cell.style.backgroundColor = cell.dataset.userColor || "#ffffff";
-
-    if (hasReferenceFocus) {
-      const userColorNormalized = normalizeHexColor(cell.dataset.userColor);
-      if (userColorNormalized === selectedFocusColor || isFocusedReferenceCell) {
-        cell.classList.add("reference-focus-match");
-      } else {
-        cell.classList.add("reference-focus-dim");
-      }
-    }
-
     return;
   }
 
-  if (referenceColor) {
-    if (hasReferenceFocus) {
-      if (isFocusedReferenceCell) {
-        const focusDepth = Math.max(Number(draftDepthSlider.value || 0), 72);
-        cell.style.backgroundColor = makeReferenceColorByDepth(referenceColor, focusDepth);
-        cell.classList.add("reference-focus-match");
-      } else {
-        cell.style.backgroundColor = "#ffffff";
-        cell.classList.add("reference-focus-dim");
-      }
+  if (isHintActive) {
+    if (referenceColor && isMatchingReference) {
+      // 開啟提示：此色票對應的位置顯示原始底稿顏色（不套用淡化深度）。
+      cell.style.backgroundColor = referenceColor;
+      cell.classList.add("reference-focus-match");
     } else {
-      const draftDepth = Number(draftDepthSlider.value || 0);
-      if (draftDepth > 0) {
-        cell.style.backgroundColor = makeReferenceColor(referenceColor);
-      } else {
-        cell.style.backgroundColor = "#ffffff";
-      }
-    }
-  } else {
-    cell.style.backgroundColor = "#ffffff";
-    if (hasReferenceFocus) {
+      // 其餘參考色不顯示，避免干擾判斷；不加入逐格藍色外框。
+      cell.style.backgroundColor = "#ffffff";
       cell.classList.add("reference-focus-dim");
     }
+  } else {
+    // 預設關閉：完全保留原本 Reference Depth 的底稿顯示邏輯。
+    const draftDepth = Number(draftDepthSlider.value || 0);
+    cell.style.backgroundColor = referenceColor && draftDepth > 0
+      ? makeReferenceColor(referenceColor)
+      : "#ffffff";
   }
 
   cell.dataset.color = "#ffffff";
@@ -1769,8 +1758,26 @@ function makeReferenceColorByDepth(hexColor, depthPercent) {
 function updateReferenceFocusColor(color) {
   const normalized = normalizeHexColor(color);
   const hasMatch = extractedPaletteColors.some(item => normalizeHexColor(item) === normalized);
-  focusedReferencePaletteColor = hasMatch ? normalized : "";
+  focusedReferencePaletteColor = isPaletteColorHintEnabled && hasMatch ? normalized : "";
 }
+
+function updatePaletteHintHelpText() {
+  if (!paletteHintHelp) return;
+  if (!isPaletteColorHintEnabled) {
+    paletteHintHelp.textContent = "已關閉：顯示完整底稿。";
+  } else if (focusedReferencePaletteColor) {
+    paletteHintHelp.textContent = `已開啟：目前顯示 ${focusedReferencePaletteColor.toUpperCase()} 的位置。`;
+  } else {
+    paletteHintHelp.textContent = "已開啟：選取上方色票，即可查看對應位置。";
+  }
+}
+
+paletteColorHintToggle.addEventListener("change", () => {
+  isPaletteColorHintEnabled = paletteColorHintToggle.checked;
+  updateReferenceFocusColor(currentColor);
+  updatePaletteHintHelpText();
+  renderAllCellDisplays();
+});
 
 function quantizeColorByStep(hexColor, step) {
   const rgb = hexToRgb(hexColor);
@@ -2302,13 +2309,17 @@ function updateSelectedPaletteColor(color) {
   });
 
   updateReferenceFocusColor(color);
+  updatePaletteHintHelpText();
   renderAllCellDisplays();
 }
 
 function clearPalette() {
   extractedPaletteColors = [];
   currentPalettePage = 1;
+  isPaletteColorHintEnabled = false;
   focusedReferencePaletteColor = "";
+  paletteColorHintToggle.checked = false;
+  updatePaletteHintHelpText();
   imagePalette.innerHTML = `<span class="palette-empty">請先上傳圖片或生成 AI 底稿</span>`;
   palettePager.classList.add("hidden-panel");
   renderAllCellDisplays();
