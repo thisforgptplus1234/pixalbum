@@ -158,7 +158,7 @@
 
           <div id="draftDepthWrapper" class="draft-depth-control hidden-panel">
             <div class="draft-depth-header">
-              <span>Reference Depth</span>
+              <span>參考底稿深度</span>
               <span id="draftDepthValue">28%</span>
             </div>
 
@@ -176,24 +176,24 @@
 
       <div class="canvas-workspace">
         <aside id="palettePanel" class="palette-panel hidden-panel">
-          <h3>Color Palette</h3>
-          <p>Colors from uploaded image or AI draft</p>
+          <h3>色彩調色盤</h3>
+          <p>來自上傳圖片或 AI 底稿的色票</p>
 
           <div id="imagePalette" class="image-palette">
-            <span class="palette-empty">Upload image or generate AI draft first</span>
+            <span class="palette-empty">請先上傳圖片或生成 AI 底稿</span>
           </div>
 
           <div id="palettePager" class="palette-pager hidden-panel">
-            <button id="palettePrevBtn" type="button">Prev</button>
+            <button id="palettePrevBtn" type="button">上一頁</button>
             <span id="palettePageInfo">Page 1 / 1</span>
-            <button id="paletteNextBtn" type="button">Next</button>
+            <button id="paletteNextBtn" type="button">下一頁</button>
           </div>
         </aside>
 
         <div class="workspace-main">
           <div class="toolbar">
             <label>
-              Canvas:
+              畫布：
               <select id="canvasSize">
                 <option value="16">16 × 16</option>
                 <option value="32" selected>32 × 32</option>
@@ -202,18 +202,18 @@
             </label>
 
             <label>
-              Color:
+              顏色：
               <input type="color" id="colorPicker" value="#1f4e79" />
             </label>
 
-            <button id="drawBtn" class="tool-btn active-tool" type="button">Brush</button>
-            <button id="eraserBtn" class="tool-btn" type="button">Eraser</button>
-            <button id="eyedropperBtn" class="tool-btn" type="button">Eyedropper</button>
-            <button id="bucketBtn" class="tool-btn" type="button">Bucket</button>
+            <button id="drawBtn" class="tool-btn active-tool" type="button">畫筆</button>
+            <button id="eraserBtn" class="tool-btn" type="button">橡皮擦</button>
+            <button id="eyedropperBtn" class="tool-btn" type="button">吸管</button>
+            <button id="bucketBtn" class="tool-btn" type="button">油漆桶</button>
 
-            <button id="undoBtn" type="button">Undo</button>
-            <button id="redoBtn" type="button">Redo</button>
-            <button id="clearBtn" type="button">Clear</button>
+            <button id="undoBtn" type="button">復原</button>
+            <button id="redoBtn" type="button">重做</button>
+            <button id="clearBtn" type="button">清空</button>
           </div>
 
           <div id="pixelCanvas" class="pixel-canvas"></div>

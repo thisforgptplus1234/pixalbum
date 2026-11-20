@@ -1630,7 +1630,7 @@ sizeSelect.addEventListener("change", event => {
   setTool("brush");
 
   if (aiDraftStatus) {
-    aiDraftStatus.textContent = `Canvas changed to ${size} × ${size}. AI generation will now follow this size.`;
+    aiDraftStatus.textContent = `畫布已切換為 ${size} × ${size}，後續 AI 生成將依此尺寸進行。`;
   }
 });
 
@@ -1643,35 +1643,57 @@ function updateDraftDepthLabel() {
 }
 
 function makeReferenceColor(hexColor) {
-  if (!hexColor || hexColor.toLowerCase() === "#ffffff") {
-    return "#ffffff";
-  }
-
   const depthPercent = Number(draftDepthSlider.value || 0);
-
-  if (depthPercent <= 0) {
-    return "#ffffff";
-  }
-
-  const keepColorRatio = depthPercent / 100;
-  const whiteMixAmount = 1 - keepColorRatio;
-
-  return mixWithWhite(hexColor, whiteMixAmount);
+  return makeReferenceColorByDepth(hexColor, depthPercent);
 }
 
 function renderCellDisplay(cell) {
+  const referenceColor = cell.dataset.referenceColor;
+  const referenceColorNormalized = normalizeHexColor(referenceColor);
+  const selectedFocusColor = focusedReferencePaletteColor;
+  const hasReferenceFocus = Boolean(selectedFocusColor);
+  const isFocusedReferenceCell = hasReferenceFocus && referenceColorNormalized === selectedFocusColor;
+
+  cell.classList.remove("reference-focus-match", "reference-focus-dim");
+
   if (cell.dataset.hasUserPaint === "true") {
     cell.style.backgroundColor = cell.dataset.userColor || "#ffffff";
+
+    if (hasReferenceFocus) {
+      const userColorNormalized = normalizeHexColor(cell.dataset.userColor);
+      if (userColorNormalized === selectedFocusColor || isFocusedReferenceCell) {
+        cell.classList.add("reference-focus-match");
+      } else {
+        cell.classList.add("reference-focus-dim");
+      }
+    }
+
     return;
   }
 
-  const referenceColor = cell.dataset.referenceColor;
-  const draftDepth = Number(draftDepthSlider.value || 0);
-
-  if (referenceColor && draftDepth > 0) {
-    cell.style.backgroundColor = makeReferenceColor(referenceColor);
+  if (referenceColor) {
+    if (hasReferenceFocus) {
+      if (isFocusedReferenceCell) {
+        const focusDepth = Math.max(Number(draftDepthSlider.value || 0), 72);
+        cell.style.backgroundColor = makeReferenceColorByDepth(referenceColor, focusDepth);
+        cell.classList.add("reference-focus-match");
+      } else {
+        cell.style.backgroundColor = "#ffffff";
+        cell.classList.add("reference-focus-dim");
+      }
+    } else {
+      const draftDepth = Number(draftDepthSlider.value || 0);
+      if (draftDepth > 0) {
+        cell.style.backgroundColor = makeReferenceColor(referenceColor);
+      } else {
+        cell.style.backgroundColor = "#ffffff";
+      }
+    }
   } else {
     cell.style.backgroundColor = "#ffffff";
+    if (hasReferenceFocus) {
+      cell.classList.add("reference-focus-dim");
+    }
   }
 
   cell.dataset.color = "#ffffff";
@@ -1724,6 +1746,30 @@ function darkenHex(hexColor, amount = 0.18) {
     Math.round(rgb.g * (1 - amount)),
     Math.round(rgb.b * (1 - amount))
   );
+}
+
+function normalizeHexColor(color) {
+  return typeof color === "string" ? color.trim().toLowerCase() : "";
+}
+
+function makeReferenceColorByDepth(hexColor, depthPercent) {
+  if (!hexColor || hexColor.toLowerCase() === "#ffffff") {
+    return "#ffffff";
+  }
+
+  if (depthPercent <= 0) {
+    return "#ffffff";
+  }
+
+  const keepColorRatio = depthPercent / 100;
+  const whiteMixAmount = 1 - keepColorRatio;
+  return mixWithWhite(hexColor, whiteMixAmount);
+}
+
+function updateReferenceFocusColor(color) {
+  const normalized = normalizeHexColor(color);
+  const hasMatch = extractedPaletteColors.some(item => normalizeHexColor(item) === normalized);
+  focusedReferencePaletteColor = hasMatch ? normalized : "";
 }
 
 function quantizeColorByStep(hexColor, step) {
@@ -2209,7 +2255,7 @@ function renderImagePalettePage(options = {}) {
     imagePalette.appendChild(button);
   });
 
-  palettePageInfo.textContent = `Page ${currentPalettePage} / ${totalPages}`;
+  palettePageInfo.textContent = `第 ${currentPalettePage} / ${totalPages} 頁`;
   palettePrevBtn.disabled = currentPalettePage <= 1;
   paletteNextBtn.disabled = currentPalettePage >= totalPages;
 
@@ -2245,21 +2291,27 @@ paletteNextBtn.addEventListener("click", () => {
 
 function updateSelectedPaletteColor(color) {
   const buttons = document.querySelectorAll(".palette-color");
+  const normalizedColor = normalizeHexColor(color);
 
   buttons.forEach(button => {
-    if (button.dataset.color.toLowerCase() === color.toLowerCase()) {
+    if (normalizeHexColor(button.dataset.color) === normalizedColor) {
       button.classList.add("selected-color");
     } else {
       button.classList.remove("selected-color");
     }
   });
+
+  updateReferenceFocusColor(color);
+  renderAllCellDisplays();
 }
 
 function clearPalette() {
   extractedPaletteColors = [];
   currentPalettePage = 1;
-  imagePalette.innerHTML = `<span class="palette-empty">Upload image or generate AI draft first</span>`;
+  focusedReferencePaletteColor = "";
+  imagePalette.innerHTML = `<span class="palette-empty">請先上傳圖片或生成 AI 底稿</span>`;
   palettePager.classList.add("hidden-panel");
+  renderAllCellDisplays();
 }
 
 /* =========================
