@@ -88,6 +88,8 @@ const adminPublicGrid = document.getElementById("adminPublicGrid");
 const adminAllGrid = document.getElementById("adminAllGrid");
 
 const DEFAULT_DRAFT_DEPTH = 28;
+// 顏色提示模式只以淡色預覽位置，不讓參考色看起來像已完成的繪圖。
+const COLOR_HINT_PREVIEW_DEPTH = 25;
 const palettePageSize = 24;
 const maxHistory = 60;
 
@@ -1669,8 +1671,9 @@ function renderCellDisplay(cell) {
 
   if (isHintActive) {
     if (referenceColor && isMatchingReference) {
-      // 開啟提示：此色票對應的位置顯示原始底稿顏色（不套用淡化深度）。
-      cell.style.backgroundColor = referenceColor;
+      // 只顯示淡色提示，保留與使用者已上色像素之間的視覺區別。
+      // 此預覽強度獨立於參考底稿深度；即使底稿深度設為 0% 仍能找到色號位置。
+      cell.style.backgroundColor = makeReferenceColorByDepth(referenceColor, COLOR_HINT_PREVIEW_DEPTH);
       cell.classList.add("reference-focus-match");
     } else {
       // 其餘參考色不顯示，避免干擾判斷；不加入逐格藍色外框。
@@ -1766,7 +1769,7 @@ function updatePaletteHintHelpText() {
   if (!isPaletteColorHintEnabled) {
     paletteHintHelp.textContent = "已關閉：顯示完整底稿。";
   } else if (focusedReferencePaletteColor) {
-    paletteHintHelp.textContent = `已開啟：目前顯示 ${focusedReferencePaletteColor.toUpperCase()} 的位置。`;
+    paletteHintHelp.textContent = `已開啟：以淡色標示 ${focusedReferencePaletteColor.toUpperCase()} 的位置。`;
   } else {
     paletteHintHelp.textContent = "已開啟：選取上方色票，即可查看對應位置。";
   }
